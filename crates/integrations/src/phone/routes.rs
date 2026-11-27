@@ -41,8 +41,8 @@ use crate::{
         pairing::PhonePairings,
         server::Shared,
         wire::{
-            self, ClassifyBody, ClassifyToDto, CurrentBody, FEATURES, FocusBody, Hello, MoveBody,
-            MoveTargetDto, PairingRef, RetakeBody, SessionBody,
+            self, ClassifyBody, ClassifyToDto, CompositionBody, CurrentBody, FEATURES, FocusBody,
+            Hello, MoveBody, MoveTargetDto, PairingRef, ResetBody, RetakeBody, SessionBody,
         },
     },
 };
@@ -66,6 +66,14 @@ pub(crate) fn router(shared: Arc<Shared>) -> Router {
         .route("/api/phone/v1/photos/{id}/move", post(move_photo))
         .route("/api/phone/v1/photos/{id}/classify", post(classify_photo))
         .route("/api/phone/v1/photos/{id}/delete", post(delete_photo))
+        .route(
+            "/api/phone/v1/photos/{id}/composition",
+            post(save_composition),
+        )
+        .route(
+            "/api/phone/v1/photos/{id}/composition/reset",
+            post(reset_composition),
+        )
         .route("/api/phone/v1/photos/{id}/preview", get(preview))
         .route("/api/phone/v1/containers/{id}/example", get(example))
         .route("/api/phone/v1/ws", get(crate::phone::ws::upgrade))
@@ -534,6 +542,56 @@ async fn delete_photo(
             ReviewService::new(h.store.as_ref(), h.clock.as_ref(), h.history.as_ref())
                 .delete_announced(h.events.as_ref(), photo_id)?;
             Ok(OK())
+        },
+    )
+    .await
+}
+
+/// PH4b: the phone's Reframe saved into the Mac's own composition.
+async fn save_composition(
+    State(shared): Shared_,
+    headers: HeaderMap,
+    RawQuery(q): RawQuery,
+    UrlPath(photo_id): UrlPath<i64>,
+    bytes: axum::body::Bytes,
+) -> Response {
+    let route = "/api/phone/v1/photos/{id}/composition";
+    api(
+        shared,
+        route,
+        token_of(&headers, q.as_deref()),
+        move |h, _| {
+            let b: CompositionBody = body(&bytes)?;
+            guard(h, b.session_id)?;
+            phone_view::session_photo(h.store.as_ref(), Some(b.session_id), photo_id)?;
+            let saved = h
+                .compositions
+                .set_at_revision(photo_id, b.revision, b.values)?;
+            Ok(serde_json::json!({"revision": saved.revision}))
+        },
+    )
+    .await
+}
+
+/// PH4b: the phone's Reset then Done (the default framing, as the Mac's reset).
+async fn reset_composition(
+    State(shared): Shared_,
+    headers: HeaderMap,
+    RawQuery(q): RawQuery,
+    UrlPath(photo_id): UrlPath<i64>,
+    bytes: axum::body::Bytes,
+) -> Response {
+    let route = "/api/phone/v1/photos/{id}/composition/reset";
+    api(
+        shared,
+        route,
+        token_of(&headers, q.as_deref()),
+        move |h, _| {
+            let b: ResetBody = body(&bytes)?;
+            guard(h, b.session_id)?;
+            phone_view::session_photo(h.store.as_ref(), Some(b.session_id), photo_id)?;
+            let saved = h.compositions.reset_at_revision(photo_id, b.revision)?;
+            Ok(serde_json::json!({"revision": saved.revision}))
         },
     )
     .await

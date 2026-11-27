@@ -20,6 +20,9 @@ pub fn error_code(error: &Error) -> (u16, &'static str) {
         Error::SidecarUnavailable => (409, "sidecar_unavailable"),
         Error::CaptureFolderNotSet => (409, "capture_folder_not_set"),
         Error::DocumentNotFront => (409, "document_not_front"),
+        Error::CompositionInvalid { .. } => (400, "composition_invalid"),
+        Error::FrameUnknown => (409, "frame_unknown"),
+        Error::CompositionChanged => (409, "composition_changed"),
         _ => (500, "internal"),
     }
 }
@@ -132,6 +135,21 @@ pub struct ClassifyBody {
 pub enum ClassifyToDto {
     Main,
     Condition,
+}
+
+/// `POST /photos/<id>/composition` (PH4b): `values` in core's serde spellings.
+#[derive(Debug, Deserialize)]
+pub struct CompositionBody {
+    pub session_id: i64,
+    pub revision: i64,
+    pub values: psm_core::domain::composition::CompositionValues,
+}
+
+/// `POST /photos/<id>/composition/reset` (PH4b).
+#[derive(Debug, Deserialize)]
+pub struct ResetBody {
+    pub session_id: i64,
+    pub revision: i64,
 }
 
 /// `GET /hello`.

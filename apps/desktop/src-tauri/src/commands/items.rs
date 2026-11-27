@@ -65,6 +65,7 @@ impl From<Error> for CommandError {
                 "composition_invalid"
             }
             Error::FrameUnknown => "frame_unknown",
+            Error::CompositionChanged => "composition_changed",
             Error::NeedsReview { photos } => {
                 data.insert("photos".into(), photos.join(", "));
                 "needs_review"

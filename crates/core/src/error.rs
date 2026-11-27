@@ -32,6 +32,9 @@ pub enum Error {
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]
     FrameUnknown,
+    /// PH4b: a save at a revision the stored composition no longer has (it changed meanwhile).
+    #[error("composition_changed")]
+    CompositionChanged,
     /// Export or publish refused while main or condition photos need re-framing (10D MC-27
     /// §Revisions); `photos` are their labels in display order (`Main 02`, `Condition 01`).
     #[error("Re-frame first: {}", photos.join(", "))]

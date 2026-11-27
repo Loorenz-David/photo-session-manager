@@ -11,7 +11,7 @@ use std::{
 use crate::{
     Result,
     domain::{
-        composition::{CompositionKind, Shape},
+        composition::{CompositionKind, CompositionState, Flip, Frame, Orientation, Rect, Shape},
         photo::{Classification, Photo},
         template::Presets,
     },
@@ -39,6 +39,8 @@ pub struct PhoneSession {
     pub counts: PhoneCounts,
     /// PH6b: the reported shutters whose photo does not exist yet and that no shot shows.
     pub incoming: PhoneIncoming,
+    /// PH6c: the `default_shape` setting (what the phone's Reset frames with).
+    pub default_shape: Shape,
 }
 
 /// PH6b: the exposures on the way (CS4a) that will join a group rather than fill a shot.
@@ -91,6 +93,23 @@ pub struct PhoneImage {
     /// Version of the preview the route can serve; never contains a file path.
     pub preview: Option<String>,
     pub ratio: Option<f64>,
+    /// PH6c: the stored composition, given only while the served preview is Capture One's
+    /// full-frame preview (the frame MC-27 measures in).
+    pub composition: Option<PhoneComposition>,
+}
+
+/// PH6c: a composition as the phone draws and edits it (core's serde spellings).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PhoneComposition {
+    pub kind: CompositionKind,
+    pub shape: Shape,
+    pub orientation: Orientation,
+    pub quarter_turns: u8,
+    pub flip: Flip,
+    pub straighten: f64,
+    pub rect: Rect,
+    pub frame: Frame,
+    pub state: CompositionState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -120,7 +139,29 @@ fn image(tx: &dyn StoreTx, photo: &Photo, default_shape: Shape) -> Result<PhoneI
             },
             default_shape,
         ),
+        composition: match (c.values(), c.frame()) {
+            (Some(v), Some(frame)) if full_frame_preview(photo) => Some(PhoneComposition {
+                kind: v.kind,
+                shape: v.shape,
+                orientation: v.orientation,
+                quarter_turns: v.quarter_turns,
+                flip: v.flip,
+                straighten: v.straighten,
+                rect: v.rect,
+                frame,
+                state: c.state,
+            }),
+            _ => None,
+        },
     })
+}
+
+/// PH6c: the preview route serves Capture One's adjusted preview (set and on disk).
+fn full_frame_preview(photo: &Photo) -> bool {
+    photo
+        .adjusted_preview_path
+        .as_deref()
+        .is_some_and(|path| Path::new(path).is_file())
 }
 
 /// PH6 for `session_id` (the active session; `None` → `{session: null}`). `now` is the time the
@@ -243,6 +284,7 @@ pub fn phone_view(
             condition,
             counts,
             incoming,
+            default_shape,
         });
         Ok(())
     })?;

@@ -28,6 +28,7 @@ mod l3_labels_check;
 mod l3_labels_download;
 mod l3_labels_generate;
 mod l4_labels_check_cards;
+mod lv10_phone_composition;
 mod lv1_frame_channel;
 mod lv1_live_hub;
 mod lv2_current_shot;

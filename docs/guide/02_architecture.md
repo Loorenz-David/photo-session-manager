@@ -202,6 +202,13 @@ wrapper `services/search.ts`. Saved pages:
   place. Every template step stores each photo's whole state (place, row, composition, denial); undo restores it.
 - **Phone Move (LV2, card LV8).** `template_placement::move_to(h, photo, MoveTarget)` — the phone swaps (container or
   Main position), appends a new extra, swaps with or appends to Condition; never replaces; one step "Move image".
+- **Phone composition save (LV10·U1, §5 PH4b; book 10J LV-D21 (6), 10D MC-27).** `CompositionService::set_at_revision(photo,
+  revision, values)` and `reset_at_revision(photo, revision)` are the phone's Reframe "Done": the stored composition is
+  read first and a different `revision` is `Error::CompositionChanged` (`composition_changed`, nothing saved: the Mac
+  framed it meanwhile); otherwise they are `set` / `reset` (MC-27 validation, one step "Compose NN", `PhotoChanged` +
+  `SessionChanged`, outputs stale by the revision, MC-28). Values equal to the stored ones (state `ok`) save nothing
+  whatever the stored origin. The check and the save are two store calls (a race of one request is accepted: the next
+  Done sees the new revision). The rule lives here (H8); the routes only parse, guard and call.
 - **Phone classify and insert moves (LV8, §5 PH4a; book 10J LV-D20).** `template_placement::classify_to(h, photo,
   ClassifyTo::{Main, Condition})` is the phone's swipe (and its drop into the other group): to Main a Condition photo
   or a template shot's photo becomes an extra at the end, an extra stays; to Condition a Main photo goes to the end, a
@@ -1029,10 +1036,18 @@ the direct adapter only.
   (no token); token (`Authorization: Bearer` or `?pair=`) for `/phone/manifest.webmanifest` and `/api/phone/v1/*`:
   `hello`, `session` (`core/services/phone_view.rs::phone_view`), POST `capture`, `focus`, `focus/clear`,
   `current`, `retake`, `photos/<id>/move` (LV8: also the kinds `extra_insert {index}`, `condition_insert {index}`),
-  `photos/<id>/classify {to: "main" | "condition"}` (LV8), `photos/<id>/delete` (each with the session guard: a non-active
+  `photos/<id>/classify {to: "main" | "condition"}` (LV8), `photos/<id>/delete`, `photos/<id>/composition {revision,
+  values}` and `photos/<id>/composition/reset {revision}` (LV10, PH4b: both answer `{revision}`; 400 `composition_invalid`,
+  409 `composition_changed`, 409 `frame_unknown`) (each with the session guard: a non-active
   `session_id` is 409 `session_changed`), GET `photos/<id>/preview`, `containers/<id>/example`. Handlers only parse,
   check auth and the guard, call core services on a blocking thread and serialize (H8). Log
   `phone.request route= status= pairing=` (never the token).
+- **The composition on the wire (PH6c, LV10·U1).** `phone_view.rs::image` gives `PhoneImage.composition` (`{kind, shape,
+  orientation, quarter_turns, flip, straighten, rect, frame: {w, h}, state}`, core's serde spellings, so the phone hands
+  them to the Mac's TypeScript geometry unchanged) only when the stored composition has a rect and a frame **and** the
+  photo's `adjusted_preview_path` is set and on disk: the picture the preview route serves is then the full frame MC-27
+  measures in. Otherwise `null` (the camera's own preview: shown as it is, not reframable). `PhoneSession.default_shape`
+  is the setting (what the phone's Reset frames with).
 - **What is on its way (PH6b, LV9·U1).** `phone_view` reads CS4a's "on the way" set once, at `now`, inside its
   transaction (`current_shot::shot_plan`: the reported shutters of the session within `FIFO_WINDOW_MS` whose photo
   does not exist yet, `StoreTx::hold_times`): a shot's `incoming` is true iff it has no photo and such a shutter is

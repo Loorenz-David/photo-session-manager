@@ -1,7 +1,8 @@
 use crate::{
     Error, Result,
     domain::composition::{
-        Composition, CompositionKind, CompositionValues, Flip, Orientation, Origin, Shape,
+        Composition, CompositionKind, CompositionState, CompositionValues, Flip, Orientation,
+        Origin, Shape,
     },
     events::AppEvent,
     mechanisms::composition::{default_rect, turned_frame, validate},
@@ -76,6 +77,36 @@ impl CompositionService {
             self.record_one(photo_id, saved.before, saved.after)?;
         }
         Ok(saved.composition)
+    }
+    /// PH4b: [`Self::set`], refused with `CompositionChanged` (nothing saved) when the stored
+    /// composition is no longer at `revision`: the caller framed an older state. Values equal to
+    /// the stored ones (state `ok`) save nothing: same revision, no step, no event, whatever the
+    /// stored origin (looking at a framing and sending it back is not a change, 10D MC-29).
+    pub fn set_at_revision(
+        &self,
+        photo_id: i64,
+        revision: i64,
+        values: CompositionValues,
+    ) -> Result<Composition> {
+        let current = self.at_revision(photo_id, revision)?;
+        if current.state == CompositionState::Ok && current.values().as_ref() == Some(&values) {
+            return Ok(current);
+        }
+        self.set(photo_id, values)
+    }
+    /// PH4b: [`Self::reset`] behind the same revision check as [`Self::set_at_revision`].
+    pub fn reset_at_revision(&self, photo_id: i64, revision: i64) -> Result<Composition> {
+        self.at_revision(photo_id, revision)?;
+        self.reset(photo_id)
+    }
+    /// The stored composition if it is at `revision`, else `CompositionChanged`.
+    fn at_revision(&self, photo_id: i64, revision: i64) -> Result<Composition> {
+        let current = self.store.composition(photo_id)?;
+        if current.revision == revision {
+            Ok(current)
+        } else {
+            Err(Error::CompositionChanged)
+        }
     }
     fn set_unrecorded(&self, photo_id: i64, values: CompositionValues) -> Result<SavedChange> {
         crate::services::retention::ensure_photo_not_cleared(self.store.as_ref(), photo_id)?;
