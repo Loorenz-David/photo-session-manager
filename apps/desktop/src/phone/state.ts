@@ -3,6 +3,8 @@
  * PH6). The Mac owns the session: shots, photos and the current shot are only ever what
  * `GET /session` last answered (MC-LV3: one current shot, server-side).
  */
+import { composedLayout } from '@/features/compose/composed';
+import type { CompositionValues, Frame } from '@/services/compositions';
 import type { Hello, PhoneImage, PhoneSession, PhoneShot } from './api';
 import { ratioLabel } from './geometry';
 import type { CameraMessage } from './socket';
@@ -319,8 +321,26 @@ export function previewHeader(subject: PreviewSubject, ratio: number): { kicker:
   return { kicker: `CONDITION ${pad(subject.position)}`, title: 'Condition image', chip };
 }
 
-/** The preview image's aspect ratio: its own composition's; a split shot is 2; an open one the live frame's. */
+/**
+ * PH6c: an image's composition as the Mac's composition geometry takes it (its values and the full
+ * frame they are measured in), or `null` for a picture that is shown as it is.
+ */
+export function composedOf(image: PhoneImage): { values: CompositionValues; frame: Frame } | null {
+  const c = image.composition;
+  if (!c) return null;
+  return {
+    values: { kind: c.kind, shape: c.shape, orientation: c.orientation, quarter_turns: c.quarter_turns, flip: c.flip, straighten: c.straighten, rect: c.rect },
+    frame: c.frame,
+  };
+}
+
+/**
+ * The preview image's aspect ratio: a composed photo's is its frame's (10D §The result is shown);
+ * else its own composition's shape; a split shot is 2; an open one the live frame's.
+ */
 export function previewRatio(s: PhoneState, subject: PreviewSubject): number {
+  const composed = composedOf(subject.image);
+  if (composed) return composedLayout(composed.values, composed.frame).ratioValue;
   if (subject.kind === 'shot' && subject.shot.split) return 2;
   return subject.image.ratio ?? (subject.kind === 'shot' ? subject.shot.ratio : null) ?? frameAspect(s);
 }

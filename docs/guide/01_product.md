@@ -298,6 +298,17 @@ label printed itself. Same key and store as conversations; labels need the scope
     button** (the left swipe denies). The Preview shows **the same photo strip** as the live screen between the
     picture and the two buttons, marking the photo shown: a tap shows another photo, a tap on an empty shot or the
     Free shot makes it current and closes the Preview, and photos are lifted and dragged there as on the live screen.
+  - **Pinch to zoom in the Preview** (LV10, book 10J LV-D21 (5)): two fingers zoom the photo about the point between
+    them, from 1× to 6× (while the fingers are down it stretches a little past both and settles on release); zoomed,
+    one finger moves it, never past its edge, and **swipes and the hold for the template are off** (the strip, ⋯ and
+    × still work). A **double tap** zooms to 3× about the tap, or back to 1×. A second finger during a swipe or a
+    hold ends it (nothing is sent) and starts a pinch. The phone taking the touch away, leaving the app or a blur
+    ends the gesture where it is. Another photo always shows at 1×.
+  - **Photos are shown as composed** (LV10, book 10J LV-D21 (6), 10D §The result is shown): once the Mac has Capture
+    One's full-frame preview of a photo, the Preview and the strips show it as the Mac frames it (turned, flipped,
+    straightened, cut to its frame; a split shows its middle line) and the Preview's picture has the framing's
+    shape. Before that (the camera's own preview only) the picture shows as it is. Display only: the phone places
+    the Mac's preview with CSS, no image is processed (H3).
   - **Nothing blinks when photos move** (LV9, book 10J LV-D21 (2), (3)): a drop **and a swipe** show in both strips at
     once; several quick ones stack and the strips keep showing them all until the Mac has answered every one (a
     refusal, or 8 s without an answer, puts the strips back to the Mac's view). A moved photo keeps its picture (it

@@ -418,6 +418,26 @@ export function sortSession(change: (session: PhoneSession) => void = () => unde
 }
 
 /**
+ * LV10 fixture K (composed): fixture S with the Mac's `default_shape` "1:1" and photo 201 composed —
+ * the default 1:1 framing of its 2560 × 1707 full frame (`1707 / 2560 = 0.6667969` wide, centred);
+ * every other photo has no composition (the camera's own preview).
+ */
+export const K_FRAME = { w: 2560, h: 1707 };
+export const K_VALUES = { kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: { x: 0.1666016, y: 0, w: 0.6667969, h: 1 } };
+/** Fixture K45's framing of 201: shape "4:5", `0.8 · 1707 / 2560 = 0.5334375` wide. */
+export const K45_VALUES = { ...K_VALUES, shape: '4:5', rect: { x: 0.2, y: 0, w: 0.5334375, h: 1 } };
+export function composedSession(change: (session: PhoneSession) => void = () => undefined, values: typeof K_VALUES = K_VALUES): PhoneSession {
+  return sortSession(session => {
+    session.default_shape = '1:1';
+    for (const image of [...session.extras, ...session.condition]) image.composition = null;
+    session.shots[0].photo!.composition = { ...values, rect: { ...values.rect }, frame: { ...K_FRAME }, state: 'ok' };
+    change(session);
+  });
+}
+/** LV10 fixture K45: K with 201 framed 4:5. */
+export const composed45Session = (change: (session: PhoneSession) => void = () => undefined) => composedSession(change, K45_VALUES);
+
+/**
  * LV8 fixture D: shots in shooting order B (final 02, photo 201), A (01, photo 204), C (03, empty);
  * extras 202, 205, 206 (Main 04, 05, 06); condition 203, 207, 208 (C1–C3); current = Free shot. Tile
  * centres x in the stub's layout: B 44 · A 108 · C 172 · 202 236 · 205 300 · 206 364 · Free 428 ·

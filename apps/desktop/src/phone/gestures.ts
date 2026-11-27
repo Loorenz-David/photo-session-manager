@@ -75,6 +75,13 @@ export const SWIPE = { holdMs: 200, startPx: 14, commitPx: 96, hintPx: 24 } as c
  */
 export const DRAG = { liftMs: 400, liftScale: 1.15, bandPx: 48, edgePx: 40, scrollStepPx: 8, scrollTickMs: 16, pendingMs: 8000 } as const;
 
+/**
+ * The Preview's zoom (book 10J LV-D21 (5); master_plan_live §5 PH11): two fingers zoom from 1× to
+ * `max`; while they are down the zoom may stretch to `stretchMin` and `stretchMax` and settles back
+ * in `settleMs` on release; a double tap goes to `doubleTap`× about the tap, or back to 1×.
+ */
+export const ZOOM = { max: 6, stretchMin: 0.8, stretchMax: 7, doubleTap: 3, settleMs: 200 } as const;
+
 /** Design §Haptics (ms). Only where the browser has them (Android Chrome); iPhone keeps the visual cues. */
 export const HAPTIC = {
   capture: [80, 40, 120],

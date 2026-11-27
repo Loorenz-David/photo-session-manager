@@ -218,6 +218,73 @@ body,
     animation: none;
   }
 }
+/* LV-D21 (5): the Preview's zoom layer. Its transform (inline) is about the viewport's centre; it follows the
+   fingers at once and eases only when it settles (a release past the limits, a double tap). */
+.ph-zoom {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  pointer-events: none;
+}
+.ph-zoom[data-settling] {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-zoom[data-settling] {
+    transition: none;
+  }
+}
+/* LV-D21 (6), 10D §The result is shown: a photo drawn as composed. `.ph-composed` is the box the picture is given
+   (the Preview's viewport, a strip tile); `.ph-composed-box` has the composition's ratio and covers it, centred;
+   `.ph-composed-frame` is the whole turned frame, placed (inline, the Mac's `composedLayout`) so that the framed part
+   fills that box, and turned by the straighten angle; the picture inside it is the Mac's full-frame preview. */
+.ph-composed {
+  overflow: hidden;
+  container-type: size;
+  object-fit: unset;
+}
+.ph-composed-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100cqw, calc(100cqh * var(--ph-composed-ratio)));
+  height: max(100cqh, calc(100cqw / var(--ph-composed-ratio)));
+  translate: -50% -50%;
+}
+.ph-composed-frame {
+  position: absolute;
+  transform-origin: center;
+  container-type: size;
+}
+.ph-composed-frame img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  translate: -50% -50%;
+  object-fit: fill;
+  pointer-events: none;
+}
+/* A quarter turn: the picture's own sides are the frame's, swapped. */
+.ph-composed-frame img[data-swapped] {
+  width: 100cqh;
+  height: 100cqw;
+}
+/* A split's middle (10D: a light line with a dark edge, visible on any photo). */
+.ph-composed-split {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ph-white);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
 .ph-image-label {
   position: absolute;
   bottom: 12px;

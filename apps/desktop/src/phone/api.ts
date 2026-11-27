@@ -52,7 +52,35 @@ export type Hello = { api: number; pairing: { id: number; name: string }; mac_na
  * PH6 `Image`. `ratio` null = the photo keeps the camera's own shape. PH6a: `preview` is null while
  * the Mac has no preview file to serve, otherwise a token that changes whenever that file does.
  */
-export type PhoneImage = { photo_id: number; revision: number; ratio: number | null; preview: string | null };
+export type PhoneImage = {
+  photo_id: number;
+  revision: number;
+  ratio: number | null;
+  preview: string | null;
+  /**
+   * PH6c: the photo's composition (10D MC-27), given only while the preview the Mac serves is
+   * Capture One's full-frame preview; `null` (or absent) = the picture is shown as it is and cannot
+   * be reframed yet.
+   */
+  composition?: PhoneComposition | null;
+};
+/**
+ * PH6c: a composition as the Mac stores it, in its own spellings (`normal`/`split`; `original`,
+ * `1:1`, `4:5`, `3:2`, `2:3`, `16:9`, `free`; `named`/`turned`; `none`/`horizontal`), so the values go
+ * to the Mac's composition geometry and back to its save route unchanged. `rect` is in fractions of
+ * the turned frame; `frame` is the full frame's size in px.
+ */
+export type PhoneComposition = {
+  kind: string;
+  shape: string;
+  orientation: string;
+  quarter_turns: number;
+  flip: string;
+  straighten: number;
+  rect: { x: number; y: number; w: number; h: number };
+  frame: { w: number; h: number };
+  state: 'ok' | 'needs_review';
+};
 export type PhoneShot = {
   container_id: number;
   final_no: number;
@@ -84,6 +112,8 @@ export type PhoneSession = {
    * without a template (`extras`), the Condition images in a templated one (`condition`).
    */
   incoming: { extras: number; condition: number };
+  /** PH6c: the Mac's `default_shape` setting (what Reset frames with); absent = `1:1`. */
+  default_shape?: string;
 };
 export type PhoneSessionView = { session: PhoneSession | null };
 /** PH4 `POST /photos/<id>/move` targets. */
