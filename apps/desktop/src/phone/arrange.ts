@@ -127,3 +127,17 @@ export function applyDrop(view: PhoneSession, photoId: number, drop: Drop): Phon
   }
   return { ...view, shots, extras, condition };
 }
+
+/**
+ * PH9.4: which photo is where. A drag is cancelled when this changes under it; a new preview
+ * picture, a revision or the current shot is not part of it (a picture arriving never cancels).
+ * The shots' `container:photo` (`-` when empty) in shooting order, then the extras' ids, then the
+ * Condition ids.
+ */
+export function arrangementKey(view: PhoneSession): string {
+  return [
+    view.shots.map(shot => `${shot.container_id}:${shot.photo?.photo_id ?? '-'}`).join(','),
+    view.extras.map(image => image.photo_id).join(','),
+    view.condition.map(image => image.photo_id).join(','),
+  ].join('|');
+}

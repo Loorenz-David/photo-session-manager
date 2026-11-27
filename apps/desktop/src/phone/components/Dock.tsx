@@ -1,6 +1,6 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { exampleUrl, type PhoneSession } from '../api';
-import { type Drop, dropTarget, type Home } from '../arrange';
+import { arrangementKey, type Drop, dropTarget, type Home } from '../arrange';
 import { buzz, DOCK, DRAG, HAPTIC } from '../gestures';
 import { type DockTile, dockTiles, tileImage } from '../state';
 import { PhotoImage } from './PhotoImage';
@@ -17,6 +17,8 @@ type Props = {
   onSelect: (tile: DockTile) => void;
   /** A lifted photo was released on a target (PH9.3): the app asks the Mac. */
   onDrop: (photoId: number, drop: Drop) => void;
+  /** The Mac is still answering a drop (PH9.5): nothing lifts meanwhile; a long press is a tap. */
+  pending: boolean;
   /** `dock` on the live screen, `preview-strip` in the Preview (LV-D20 (2): the same strip in both). */
   testId?: string;
   /** The Preview's strip outlines the photo shown (plan point P11) instead of the current shot. */
@@ -37,6 +39,8 @@ type Lift = {
   photoId: number;
   /** Every tile's home, measured once, at lift. */
   homes: Home[];
+  /** Which photo was where at lift (PH9.4): the drag does not outlive a change of it. */
+  arrangement: string;
   /** The strip's rectangle at lift: the band and the auto-scroll edges are counted from it. */
   strip: { left: number; right: number; top: number; bottom: number };
   /** Where the finger took the tile: x in content coordinates, y on screen. */
@@ -75,11 +79,14 @@ const same = (a: Drop | null, b: Drop | null) => JSON.stringify(a) === JSON.stri
  * Condition images, to the other group's end). Targets are computed from the tiles' homes measured
  * at lift, never from where they are drawn while they slide. No HTML5 drag and drop.
  */
-export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId = 'dock', marked }: Props) {
+export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending, testId = 'dock', marked }: Props) {
   const tiles = dockTiles(view);
-  // A timer started at the press reads the tiles as they are when it fires.
-  const shown = useRef(tiles);
-  shown.current = tiles;
+  const arrangement = arrangementKey(view);
+  // A timer started at the press reads the strip as it is when it fires.
+  const shown = useRef({ tiles, arrangement, pending });
+  shown.current = { tiles, arrangement, pending };
+  /** The fingers on the strip: a gesture is one finger's, and only when it is alone (PH9.4). */
+  const fingers = useRef(new Set<number>());
   const strip = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -114,7 +121,7 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
         best = element.dataset.dockK;
       }
     }
-    return distance <= DOCK.nearPx ? shown.current.find(tile => tile.key === best) : undefined;
+    return distance <= DOCK.nearPx ? shown.current.tiles.find(tile => tile.key === best) : undefined;
   };
 
   /** The strip looks `look` for `ms`, then as always. */
@@ -126,7 +133,10 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
 
   /**
    * The gesture is over, whatever it was: its timers stop and the strip is idle. A drag that ends
-   * `dropped` is shown where it landed at once; any other end lets the tiles spring home.
+   * `dropped` is shown where it landed at once; any other end lets the tiles spring home. Every
+   * cancel of PH9.4 is this function with `false`: the pointer cancelled, a second finger, the page
+   * hidden, the window blurred, the arrangement changed, the strip unmounted, a release on no target.
+   * Whatever the finger does afterwards finds no gesture and asks nothing.
    */
   const finish = useCallback((dropped: boolean) => {
     const now = gesture.current;
@@ -141,10 +151,44 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
     lookFor(dropped ? 'set' : 'back', dropped ? SET_MS : BACK_MS);
   }, [lookFor]);
 
+  // PH9.4: the strip unmounting (its Preview closed) ends the gesture and every timer of it.
   useEffect(() => () => {
     finish(false);
     if (afterTimer.current) clearTimeout(afterTimer.current);
   }, [finish]);
+
+  // PH9.4: leaving the app (the page hidden, the window without focus) cancels; so does a finger
+  // whose release the strip never saw (it is forgotten wherever it ends).
+  useEffect(() => {
+    const away = () => {
+      fingers.current.clear();
+      finish(false);
+    };
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') away();
+    };
+    const gone = (event: PointerEvent) => {
+      fingers.current.delete(event.pointerId);
+    };
+    window.addEventListener('blur', away);
+    document.addEventListener('visibilitychange', hidden);
+    window.addEventListener('pointerup', gone, true);
+    window.addEventListener('pointercancel', gone, true);
+    return () => {
+      window.removeEventListener('blur', away);
+      document.removeEventListener('visibilitychange', hidden);
+      window.removeEventListener('pointerup', gone, true);
+      window.removeEventListener('pointercancel', gone, true);
+    };
+  }, [finish]);
+
+  // PH9.4: the Mac changed which photo is where while one was lifted: the drag is over (a new
+  // picture, a revision or the current shot does not change the key). So is it when the strip
+  // stops taking touches under the finger.
+  useEffect(() => {
+    const now = gesture.current;
+    if (now && (!enabled || (carries(now) && now.lift.arrangement !== arrangement))) finish(false);
+  }, [arrangement, enabled, finish]);
 
   /** PH9.3: the finger is at `(clientX, clientY)`: the target under it, and where the lifted tile is drawn. */
   const follow = (lift: Lift, clientX: number, clientY: number) => {
@@ -187,9 +231,10 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
     const box = strip.current?.getBoundingClientRect();
     const tile = nearest(clientX);
     const image = tile && tileImage(tile);
-    if (!element || !box || !tile || !image) return;
+    // A tile without a photo never lifts, and nothing lifts while the Mac answers a drop: the press stays a tap.
+    if (!element || !box || !tile || !image || shown.current.pending) return;
     const homes = Array.from(element.querySelectorAll<HTMLElement>('[data-dock-k]')).flatMap((node): Home[] => {
-      const of = shown.current.find(candidate => candidate.key === node.dataset.dockK);
+      const of = shown.current.tiles.find(candidate => candidate.key === node.dataset.dockK);
       if (!of) return [];
       const rect = node.getBoundingClientRect();
       return [{ key: of.key, kind: of.kind, centre: rect.left - box.left + element.scrollLeft + rect.width / 2, container_id: of.kind === 'shot' ? of.shot.container_id : null }];
@@ -197,7 +242,7 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
     const source = homes.find(home => home.key === tile.key);
     if (!source) return;
     const lift: Lift = {
-      source, photoId: image.photo_id, homes, strip: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
+      source, photoId: image.photo_id, homes, arrangement: shown.current.arrangement, strip: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
       grab: { x: clientX - box.left + element.scrollLeft, y: clientY }, finger: { x: clientX, y: clientY }, target: null, scrolling: 0, scroll: null,
     };
     gesture.current = { phase: 'lifted', pointerId, lift };
@@ -206,11 +251,18 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
   };
 
   const down = (event: Pointer) => {
-    if (!enabled || !scroller.current || gesture.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    // A primary pointer is the first finger down with no other on the screen: any finger still
+    // counted is one whose end was never seen (so a lost release can never leave the strip dead).
+    if (event.isPrimary) fingers.current.clear();
+    fingers.current.add(event.pointerId);
+    // PH9.4: a second finger cancels, and starts nothing of its own.
+    if (fingers.current.size > 1) return finish(false);
+    if (!enabled || !scroller.current) return;
+    // The only finger on the strip: a gesture still held is one whose end was never seen.
+    finish(false);
     const { pointerId, clientX, clientY } = event;
     const now: Press = { phase: 'pressing', pointerId, x: clientX, y: clientY, scrollLeft: scroller.current.scrollLeft, timer: null };
-    // A tile without a photo never lifts: its long press is still a tap.
     now.timer = setTimeout(() => {
       if (gesture.current === now && now.phase === 'pressing') liftAt(pointerId, clientX, clientY);
     }, DRAG.liftMs);
@@ -239,6 +291,7 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
   };
 
   const up = (event: Pointer) => {
+    fingers.current.delete(event.pointerId);
     const now = gesture.current;
     if (!now || now.pointerId !== event.pointerId) return;
     move(event);
@@ -255,7 +308,9 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId =
     if (tile) onSelect(tile);
   };
 
+  /** PH9.4: the phone took the touch away (a call, a system gesture). */
   const cancel = (event: Pointer) => {
+    fingers.current.delete(event.pointerId);
     if (gesture.current?.pointerId === event.pointerId) finish(false);
   };
 

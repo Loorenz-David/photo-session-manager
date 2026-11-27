@@ -14,7 +14,7 @@ import { PropertiesPage } from './components/PropertiesPage';
 import { Stage } from './components/Stage';
 import { Toast } from './components/Toast';
 import { isRotated, type Point } from './geometry';
-import { buzz, HAPTIC } from './gestures';
+import { buzz, DRAG, HAPTIC } from './gestures';
 import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
 import {
   backLabel, connected, type DockTile, initialState, itemRows, landedToast, type MoveTile, nextStep, pad, photoIds, previewRatio, previewSubject, reduce, stageRatio,
@@ -68,6 +68,19 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     c.known = new Set(ids);
   }, [toast]);
 
+  // PH9.5: while the Mac answers a drop, the strips show where the photo was put (`pending`). It
+  // ends exactly three ways: the first session read started after the Mac's answer returns
+  // (`after` = the reads asked by then), the Mac refuses, or `DRAG.pendingMs` pass.
+  const [pending, setPending] = useState<PhoneSession | null>(null);
+  const waiting = useRef<{ n: number; after: number | null; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const drops = useRef(0);
+  const endPending = useCallback(() => {
+    if (waiting.current) clearTimeout(waiting.current.timer);
+    waiting.current = null;
+    setPending(null);
+  }, []);
+  useEffect(() => endPending, [endPending]);
+
   // The session is only ever what the Mac last answered; a slower, older answer never replaces a newer one.
   const asked = useRef(0);
   const readSession = useCallback(async () => {
@@ -77,13 +90,15 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       if (mine === asked.current) {
         reconcile(answer.session);
         dispatch({ type: 'view', view: answer.session });
+        // A read started before the answer may predate the move: only a later one ends the wait.
+        if (waiting.current && waiting.current.after !== null && mine > waiting.current.after) endPending();
       }
       return true;
     } catch (error) {
       if (error instanceof Unpaired) onRemoved();
       return false;
     }
-  }, [token, onRemoved, reconcile]);
+  }, [token, onRemoved, reconcile, endPending]);
 
   /** A request the Mac refused: its code decides what the person is told (master_plan_live §6). */
   const refused = useCallback((error: unknown, otherwise: string) => {
@@ -290,17 +305,26 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     if (confirming !== null && !asksStill) setConfirming(null);
   }, [confirming, asksStill]);
 
-  // PH9.5: while the Mac answers a drop, the strips show where the photo was put.
-  const [pending, setPending] = useState<PhoneSession | null>(null);
-
   /**
-   * PH9.2–PH9.3: a lifted photo was released on a target. The Mac is asked (a swap or an insert is
+   * PH9.2–PH9.5: a lifted photo was released on a target. The Mac is asked (a swap or an insert is
    * a move, the other group is a classify) and the strips show the drop at once; a successful drop
-   * says nothing, a refused one says why.
+   * says nothing (the Mac's next view shows it), a refused one goes back and says why, and one the
+   * Mac has not answered in 8 s goes back and asks the Mac what is true.
    */
   const drop = async (photoId: number, target: Drop) => {
     if (!view) return;
     if (target.kind === 'main_confirm') return setConfirming({ photo_id: photoId, dropped: true });
+    const n = ++drops.current;
+    if (waiting.current) clearTimeout(waiting.current.timer);
+    waiting.current = {
+      n,
+      after: null,
+      timer: setTimeout(() => {
+        if (waiting.current?.n !== n) return;
+        endPending();
+        void readSession();
+      }, DRAG.pendingMs),
+    };
     setPending(applyDrop(view, photoId, target));
     buzz(HAPTIC.move);
     // A template shot that loses its photo to the other group becomes the current shot (plan point P6).
@@ -309,10 +333,10 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       if (target.kind === 'swap') await movePhoto(token, photoId, view.id, { kind: 'container', container_id: target.container_id });
       else if (target.kind === 'insert') await movePhoto(token, photoId, view.id, { kind: target.group === 'extra' ? 'extra_insert' : 'condition_insert', index: target.index });
       else await classifyPhoto(token, photoId, view.id, target.kind === 'to_condition' ? 'condition' : 'main');
-      setPending(null);
+      if (waiting.current?.n === n) waiting.current.after = asked.current;
       void readSession();
     } catch (error) {
-      setPending(null);
+      if (waiting.current?.n === n) endPending();
       refused(error, TEXT.failed);
     }
   };
@@ -390,7 +414,8 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
         buzz(HAPTIC.clearFocus);
         clearFocus();
       }} />
-    {arranged && <Dock token={token} view={arranged} rotated={rotated} enabled={free} onSelect={select} onDrop={(photoId, target) => void drop(photoId, target)} />}
+    {arranged && <Dock token={token} view={arranged} rotated={rotated} enabled={free} onSelect={select} onDrop={(photoId, target) => void drop(photoId, target)}
+      pending={pending !== null} />}
     <ControlBar rotated={rotated} next={next} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} onMenu={() => {
       buzz(HAPTIC.menu);
       dispatch({ type: 'menu', open: true });
@@ -402,7 +427,8 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
         dispatch({ type: 'move', open: true });
       }} onSwipe={action => (action === 'main_confirm' ? setConfirming({ photo_id: subject.image.photo_id, dropped: false }) : void swipe(action))}
       strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.moveOpen && confirming === null}
-        onSelect={selectInPreview} onDrop={(photoId, target) => void drop(photoId, target)} testId="preview-strip" marked={subject.image.photo_id} />} />}
+        onSelect={selectInPreview} onDrop={(photoId, target) => void drop(photoId, target)} pending={pending !== null} testId="preview-strip"
+        marked={subject.image.photo_id} />} />}
     {view && subject && <MoveDrawer token={token} view={view} subject={subject} open={state.moveOpen} onClose={() => dispatch({ type: 'move', open: false })}
       onPick={tile => void move(tile)} />}
     {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}

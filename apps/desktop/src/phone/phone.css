@@ -609,10 +609,6 @@ body,
   box-sizing: border-box;
   padding-bottom: 48px;
 }
-.ph-dock-strip[data-drag='on'],
-.ph-dock-strip[data-drag='back'] {
-  z-index: 31;
-}
 /* The tiles of the lifted photo's group slide aside in 150 ms; a cancelled drag springs home in under 200 ms. */
 .ph-dock-strip[data-drag='on'] .ph-dock-tile {
   transition: transform 0.15s ease;

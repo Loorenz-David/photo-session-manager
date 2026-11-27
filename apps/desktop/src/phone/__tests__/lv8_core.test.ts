@@ -2,7 +2,7 @@
 // the plan's only unit tests): input → output on the real functions, one case per rule line.
 import { expect, test } from 'vitest';
 import type { PhoneSession } from '../api';
-import { applyDrop, type Drop, dropTarget, type Home, nextPhoto, swipeAction } from '../arrange';
+import { applyDrop, arrangementKey, type Drop, dropTarget, type Home, nextPhoto, swipeAction } from '../arrange';
 import { previewSubject } from '../state';
 import { A, B, C, dragSession, PHOTO_B, PHOTO_C1, PHOTO_C2, PHOTO_EXTRA, sortSession } from './helpers';
 
@@ -178,4 +178,46 @@ test('lv8_core_applyDrop_leaves_the_current_shot_and_the_given_view_alone', () =
   expect(arrangement(view)).toBe('201 204 - | 202 205 206 | 203 207 208');
   // A photo that is not in the view changes nothing.
   expect(applyDrop(view, 999, { kind: 'to_main' })).toBe(view);
+});
+
+// ---- arrangementKey (PH9.4: which photo is where, and nothing else) ----
+
+test('lv8_core_arrangementKey_lists_shots_in_shooting_order_then_extras_then_condition', () => {
+  expect(arrangementKey(dragSession())).toBe('12:201,11:204,13:-|202,205,206|203,207,208');
+});
+
+test('lv8_core_arrangementKey_changes_with_every_place', () => {
+  const given = arrangementKey(dragSession());
+  const changed = (change: (s: PhoneSession) => void) => arrangementKey(dragSession(change)) !== given;
+  // A shot gains, loses or exchanges its photo; an extra or a Condition image comes, goes or moves.
+  expect(changed(s => {
+    s.shots[2].photo = { photo_id: 210, revision: 1, ratio: 1, preview: 'k0' };
+  })).toBe(true);
+  expect(changed(s => {
+    s.shots[0].photo = null;
+  })).toBe(true);
+  expect(changed(s => {
+    [s.shots[0].photo, s.shots[1].photo] = [s.shots[1].photo, s.shots[0].photo];
+  })).toBe(true);
+  expect(changed(s => {
+    s.extras.reverse();
+  })).toBe(true);
+  expect(changed(s => {
+    s.condition.pop();
+  })).toBe(true);
+  // An extra that became a Condition image is not the same arrangement, though the ids are the same.
+  expect(changed(s => {
+    s.condition.unshift(s.extras.pop()!);
+  })).toBe(true);
+});
+
+test('lv8_core_arrangementKey_ignores_pictures_revisions_and_the_current_shot', () => {
+  const given = arrangementKey(dragSession());
+  expect(arrangementKey(dragSession(s => {
+    s.extras[1] = { ...s.extras[1], preview: 'k1', revision: 4, ratio: 1.5 };
+    s.shots[0].photo = { ...s.shots[0].photo!, preview: null };
+    s.current = { kind: 'shot', container_id: C };
+    s.counts = { main: 9, condition: 9 };
+    s.item.name = 'Other';
+  }))).toBe(given);
 });
