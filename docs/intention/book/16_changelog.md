@@ -480,3 +480,9 @@ MC-LV3); a Wi-Fi stall closes a phone's socket instead of skipping frames; Focus
 exposure readout not read; tile previews stuck as broken images. Evidence: `docs/implementation/STATUS_live.md` (LV4
 running record), to be written into the evidence files when the check completes.
 D19 addendum (2026-11-26, owner): the phone's slide-up-to-lock distance halves (110 → 55 px), 10J LV-D19 (3).
+
+D20. **2026-11-27 — Owner: sort and arrange on the phone (10J LV-D20).** After the hardware check (LV4 DONE, 20/20,
+M-LV6 targets set): swipe left/right/up in the phone's Preview = Deny / Main / Condition (a template-shot photo asks
+before leaving its shot for Main); the Preview gets the live screen's photo row; press-hold-lift drag and drop in both
+rows (swap between template shots, insert-and-shift among other Main and among Condition photos). Built from the
+description; the owner judges comfort in use.
