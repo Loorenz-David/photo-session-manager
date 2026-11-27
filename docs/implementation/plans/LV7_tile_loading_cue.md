@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV7 — Tile loading cue (owner request R2 at the hardware check)
 
-**Tracker:** NOT_STARTED (2026-11-27, orchestrator)
+**Tracker:** IMPLEMENTED (2026-11-27, fable) — the waiting placeholder sweeps (CSS only, 1.8 s, off under reduced motion); 4 new tests for the 4 rows; phone tests 107 passed, `npm test` 1062 passed, typecheck and build green.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -85,3 +85,32 @@ The reviewer runs the unit test commands once, reads the CSS for the reduced-mot
 checks nothing outside `apps/desktop/src/phone/` and the guide changed. Only B1–B4 block.
 
 ## Review log
+
+### 2026-11-27 — implement r1 (fable)
+**Built.** `phone.css`: `.ph-photo-wait` gets `overflow: hidden; isolation: isolate` and a `::before` band
+(`linear-gradient(100deg, transparent 20%, #fff 50%, transparent 80%)`, opacity 0.9, `pointer-events: none`,
+`z-index: -1` so the placeholder's own text stays above it) moved by `@keyframes ph-photo-sweep`
+(`translateX(-100% → 100%)`, `1.8s linear infinite`); `@media (prefers-reduced-motion: reduce)` sets
+`animation: none` and the band rests out of sight (its base transform is `translateX(-100%)`), so the tile is plain
+grey as before. `PhotoImage.tsx` is unchanged. Guide: the image-rule line in `docs/guide/02_architecture.md`.
+Tests: `apps/desktop/src/phone/__tests__/lv7_loading_cue.test.tsx` (4 tests, one per row).
+
+**Assumptions (delegated choices).**
+1. The cue is carried by the existing class `ph-photo-wait` (row C1(a) allows "class or attribute"); no new class, no
+   markup change.
+2. Peak colour is white over `--ph-fill` (#f1f1ef): about 6 % lighter, under the plan's ~12 % limit. Angle 100°,
+   duration 1.8 s, linear (the plan's example range).
+3. Every placeholder sweeps, wherever `PhotoImage` draws one: dock tiles, Move drawer tiles and the full Preview
+   (behind "Preparing preview…"), the delegated choice taken as "same sweep".
+4. A picture that failed to load sweeps too, including one whose three retries are used up (it then sweeps until a
+   new preview version arrives). Telling "still arriving" from "gave up" needs a class from `PhotoImage` and a row the
+   plan does not have; left as is, noted for the reviewer/backlog.
+
+**Deviations.** None. No Rust or C++ file changed; the Rust gate was not run (plan's Closing gate), LV6's stamp stands.
+
+**Observations.** The frontend tsconfig has no Node types: the test reads `phone.css` with `node:fs` under the same
+`@ts-expect-error` line `lv6_dock.test.tsx` uses. The first closing-gate run failed typecheck and build on the new test
+file only (typing of `matchAll` callbacks, then that import); fixed, and typecheck, the phone tests and the build
+re-run green. `npm test` (1062 passed) ran before that fix; the fix changed only the new test file, which the
+phone-tests re-run covers. The look was not seen on a phone or in a browser in this session: rows are proven on the
+markup and the stylesheet text (jsdom runs no animation); step 2 of the manual try-out is the visual check.

@@ -186,6 +186,31 @@ body,
   color: var(--ph-secondary);
   font-size: 13px;
   pointer-events: none;
+  /* The loading cue (LV7, owner R2): the band below is clipped to the tile and stays under the placeholder's text. */
+  overflow: hidden;
+  isolation: isolate;
+}
+/* A faint band of light crossing the grey, slowly: the photo is on its way, nothing to wait for. The peak is white
+   over --ph-fill (#f1f1ef), about 6 % lighter. Parked out of sight (left of the tile) when it does not move. */
+.ph-photo-wait::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, var(--ph-white) 50%, transparent 80%);
+  opacity: 0.9;
+  transform: translateX(-100%);
+  animation: ph-photo-sweep 1.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes ph-photo-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-photo-wait::before {
+    animation: none;
+  }
 }
 .ph-image-label {
   position: absolute;

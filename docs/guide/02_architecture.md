@@ -1069,8 +1069,9 @@ the direct adapter only.
   - **The image rule (LV6; §5 PH6a, finding F7).** Every photo preview on the phone is drawn by
     `components/PhotoImage.tsx` (dock, Preview, Move drawer), never by a bare `<img>`: it asks for
     `photos/<id>/preview?pair=…&r=<revision>&v=<preview>` (`api.ts::previewUrl`) only while the session view's
-    `preview` token is a string; while it is null, or after a load error, it shows a plain placeholder (`.ph-photo-wait`;
-    "Preparing preview…" in the Preview). A failed load is asked again three times, 2 s apart (`&try=<n>`, which the
+    `preview` token is a string; while it is null, or after a load error, it shows a grey placeholder (`.ph-photo-wait`;
+    "Preparing preview…" in the Preview) with a faint light sweep (LV7: `ph-photo-sweep` in `phone.css`, 1.8 s, off
+    under `prefers-reduced-motion: reduce`; it takes no pointer events). A failed load is asked again three times, 2 s apart (`&try=<n>`, which the
     Mac ignores); a new `preview` or `revision` starts over.
   - Capture feedback: flash and haptic at the tap; the toast waits for the socket's `capture exposed` for that
     capture id and then for the session re-read that shows a new photo (its place decides the text).
