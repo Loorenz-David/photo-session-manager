@@ -175,7 +175,8 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- Planner for LV9/LV10 (`.pipeline/runs/live_tools_plan_r1.log`), started 2026-11-27.
+None. The LV9/LV10 planner stopped at once on the Claude usage limit (resets 19:20 Stockholm); nothing written.
+**Next:** relaunch `claude -p --agent pipeline-planner --model opus --allowedTools Bash Read Edit Write Grep Glob --permission-mode acceptEdits --no-session-persistence < docs/implementation/prompts/reviewer/live_tools_plan_r1.md`, then `run_phase.sh phase LV9_preview_corrections`, then LV10; rebuild the SDK sidecar, build, install; owner try-out.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
