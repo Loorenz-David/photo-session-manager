@@ -132,6 +132,11 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     - **R2 a quiet loading cue on a tile whose picture is arriving:** "while the picture is arriving i see the gray
       picture i would like to see some small loading animation that doesn't disturb (like gradient loading … slightly,
       so it doesn't look like i have to wait to take the next picture)".
+  - **C1/C9 USB (2026-11-27 ~14:24 local):** link `Cable`; source 23–25 fps (`frames_10s` 231–251); iPhone locked
+    `sent_10s` 216–250, skipped 0–33 around captures; request → exposed 0.44–0.47 s; each capture one photo via
+    Save-to-PC ~1.4 s after exposure, bound to the current shot (11, 9, 12 …); the same file also arrived by Auto FTP
+    over Wi-Fi ~5 s later and was filed `outcome=duplicate` (no second photo). Owner: "seems fast"; retake onto a taken
+    shot works. PASS (delay photo pending).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
