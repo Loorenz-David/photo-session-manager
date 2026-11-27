@@ -37,6 +37,17 @@ pub struct PhoneSession {
     pub extras: Vec<PhoneImage>,
     pub condition: Vec<PhoneImage>,
     pub counts: PhoneCounts,
+    /// PH6b: the reported shutters whose photo does not exist yet and that no shot shows.
+    pub incoming: PhoneIncoming,
+}
+
+/// PH6b: the exposures on the way (CS4a) that will join a group rather than fill a shot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub struct PhoneIncoming {
+    /// Untemplated session: they become Main at the end of the list (P66).
+    pub extras: u32,
+    /// Templated session, bound to no container: they become Condition (10G §4 rule 4).
+    pub condition: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -68,6 +79,8 @@ pub struct PhoneShot {
     /// Whether the container has an example image.
     pub example: bool,
     pub photo: Option<PhoneImage>,
+    /// PH6b: no photo yet, and a reported shutter on the way (CS4a) is bound to this container.
+    pub incoming: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -163,6 +176,19 @@ pub fn phone_view(
         };
         let mut shot_list = Vec::new();
         let mut in_container = std::collections::HashSet::new();
+        // PH6b: CS4a's "on the way" set, read once at `now`.
+        let mut incoming = PhoneIncoming::default();
+        let held = match &template {
+            Some(template) => {
+                let plan = current_shot::shot_plan(tx, session_id, now, template)?;
+                incoming.condition = plan.held_free;
+                plan.held
+            }
+            None => {
+                incoming.extras = tx.hold_times(session_id, now)?.len() as u32;
+                Default::default()
+            }
+        };
         if let Some(template) = &template {
             for id in current_shot::order(template) {
                 let c = template
@@ -191,6 +217,7 @@ pub fn phone_view(
                     zoom: c.presets.zoom,
                     example: c.example_file.is_some(),
                     photo: photo.map(|p| image(tx, p, default_shape)).transpose()?,
+                    incoming: photo.is_none() && held.contains(&c.id),
                 });
             }
         }
@@ -215,6 +242,7 @@ pub fn phone_view(
             extras,
             condition,
             counts,
+            incoming,
         });
         Ok(())
     })?;

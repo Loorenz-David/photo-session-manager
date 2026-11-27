@@ -1033,6 +1033,14 @@ the direct adapter only.
   `session_id` is 409 `session_changed`), GET `photos/<id>/preview`, `containers/<id>/example`. Handlers only parse,
   check auth and the guard, call core services on a blocking thread and serialize (H8). Log
   `phone.request route= status= pairing=` (never the token).
+- **What is on its way (PH6b, LV9·U1).** `phone_view` reads CS4a's "on the way" set once, at `now`, inside its
+  transaction (`current_shot::shot_plan`: the reported shutters of the session within `FIFO_WINDOW_MS` whose photo
+  does not exist yet, `StoreTx::hold_times`): a shot's `incoming` is true iff it has no photo and such a shutter is
+  bound to its container (`ShotPlan::held`); the session's `incoming {extras, condition}` counts the ones that will
+  join a group instead — bound to no container in a templated session (`ShotPlan::held_free` → Condition), every one
+  in an untemplated session (→ Main at the end, P66). Read-only: the rule lives in core, the route and the events are
+  unchanged (CS5's `SessionChanged` at the binding and the arrival's `PhotoAdded` already make the phone re-read). A
+  Capture One tether capture has no reported shutter, so it is never `incoming`.
 - **WebSocket (PH5; `phone/ws.rs`).** `/api/phone/v1/ws?pair=` (401 before upgrade). Each socket is a hub viewer
   (`PhoneOutlet`: a `LatestSlot` for frames, a queue of ≤ 64 text messages); the writer task drops frames of an
   older demand `gen`, writes the 32-byte `PSMF` header + JPEG, pings every 5 s, closes 4408 (idle 15 s or a write

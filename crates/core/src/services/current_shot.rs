@@ -69,6 +69,8 @@ pub(crate) struct PhotoShot {
 pub(crate) struct ShotPlan {
     pub photos: HashMap<i64, PhotoShot>,
     pub held: HashSet<i64>,
+    /// PH6b: the reported shutters on the way that are bound to no container (→ Condition).
+    pub held_free: u32,
 }
 
 /// The containers of the template in shooting order (`shoot_no` ascending).
@@ -116,6 +118,7 @@ pub(crate) fn shot_plan(
     let mut plan = ShotPlan {
         photos: HashMap::new(),
         held: HashSet::new(),
+        held_free: 0,
     };
     for (i, slot) in shot_order::slot_owners(shots, tx.hold_times(session_id, now)?)
         .into_iter()
@@ -139,11 +142,15 @@ pub(crate) fn shot_plan(
                     },
                 );
             }
-            Occupant::Hold(_) => {
-                if let Some(c) = owner_binding.and_then(|b| in_template(b, template).container_id) {
+            Occupant::Hold(_) => match owner_binding.map(|b| in_template(b, template)) {
+                Some(ShotBinding {
+                    container_id: Some(c),
+                }) => {
                     plan.held.insert(c);
                 }
-            }
+                Some(ShotBinding { container_id: None }) => plan.held_free += 1,
+                None => {}
+            },
         }
     }
     Ok(plan)
