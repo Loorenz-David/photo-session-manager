@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV8 — Sort and arrange on the phone (book 10J LV-D20)
 
-**Tracker:** NOT_STARTED (2026-11-27, planner)
+**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units checkpointed (`09ba8340`, `9cbb7f7c`, `0348cc8a`, `c7824ab9`): the Mac's classify route and insert moves; the Preview's swipes, confirmation and strip; lift-drag-drop in both strips; cancels and the pending drop. 70 row tests (14 Rust, 56 UI) and 20 core unit tests; `cargo test --workspace` 2774 passed, clippy, fmt, sidecar, typecheck and build green; `npm test` 1135 passed, 1 failed (the known `p33_split_grid` C4(d) flake, green alone).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -467,3 +467,103 @@ On this Mac with the camera connected and a phone paired (the app built from thi
 7. On the Mac, check each change in the session view.
 
 ## Review log
+
+### 2026-11-27 — implement r1 (fable)
+**Built, by unit (checkpoints in order: U1 `09ba8340`, U2 `9cbb7f7c`, U3 `0348cc8a`, U4 `c7824ab9`).**
+- **U1 (Rust).** `template_placement::classify_to(h, photo_id, ClassifyTo::{Main, Condition})` and
+  `MoveTarget::{ExtraInsert, ConditionInsert}`. `move_to`'s transaction became the private `move_photo(h, photo_id,
+  choose)`: it reads the phone's model once, asks `choose` where the photo goes given where it is (a container, an
+  extra, Condition; `None` = nothing changes) and writes; `move_to` passes its target, `classify_to` passes PH4a's
+  table. No second copy of the model. `CurrentShots::set_after_take_out` (log `by=classify`) is called after the
+  commit and before `HandAction::finish`. Wire: `ClassifyBody`, `ClassifyToDto` (serde, lowercase),
+  `MoveTargetDto::{ExtraInsert, ConditionInsert}`; route `classify_photo` (parse, guard, `session_photo`, call).
+- **U2 (phone).** `arrange.ts` (`swipeAction`, `nextPhoto`); `Preview.tsx` runs PH9.1's touch (`pressing → swiping |
+  holding`), the hint and a short fly-out; `ConfirmSheet.tsx`; `PhoneApp` sends the swipe's request and sets the next
+  photo before it; the Preview carries `Dock` as `preview-strip`; the Delete button is gone.
+- **U3 (phone).** `arrange.ts` (`dropTarget`, `applyDrop`); `Dock.tsx` is PH9.2's state machine on pointer events with
+  pointer capture; homes measured once in `liftAt`; the auto-scroll is a 16 ms interval that exists only while the
+  finger is in an end zone; `PhoneApp.drop` maps a `Drop` to move or classify.
+- **U4 (phone).** `arrangementKey`; every cancel cause calls `Dock`'s `finish(false)`; the pending drop is `PhoneApp`
+  state with three ends (`endPending` is called from the read that started after the answer, from the refusal, and
+  from the 8 s timer; also on unmount).
+
+**Assumptions (judgment calls; each is one sentence for the narrative).**
+1. *Swipe on a photo that has no template* (an extra, a Condition image) may start at any moment of the touch: the
+   200 ms window exists only to tell a swipe from the hold, and those photos have no hold. A template shot's photo
+   follows PH9.1 exactly (swipe within 200 ms, else hold).
+2. "A move of more than 14 px" is the straight-line distance from the touch.
+3. The hint shows from 24 px and grows to full strength at 96 px (then it swells slightly: "let go now"); DENY is red,
+   MAIN / CONDITION dark, ALREADY … dashed, and for those the photo follows the finger at 35 % only.
+4. The toast and the re-read come when the Mac has answered (as Retake's always did); the haptic and the next photo
+   come at the swipe. A refused swipe therefore shows only the refusal.
+5. A second finger on the picture cancels a swipe (PH9.1 lists pointercancel, hidden and blur; added for the same
+   reason as PH9.4's).
+6. The swipe moves the picture element itself; while a photo has no preview yet (grey "Preparing preview…") the hint
+   shows but the grey box does not follow the finger (`PhotoImage.tsx` is not in this milestone's files).
+7. The Preview's strip sits directly under the picture and scrolls just far enough to keep the marked photo in sight;
+   a tap on the photo already shown does nothing; a tap on an empty shot that is already current closes the Preview
+   without a request. An extra's or Condition image's Back button takes the whole row (no Delete beside it).
+8. The confirmation is a bottom sheet named by its question (`role="dialog"`); it closes by itself if the Mac's view no
+   longer has that photo in a template shot.
+9. The focus marker is cleared whenever a swipe or drop takes a photo out of its template shot (the current shot
+   changes, as with Retake).
+10. *Lifted look:* the tile follows the finger sideways without limit and up/down by at most 48 px (the drop band),
+    dims beyond it, is held where it was touched; its home shows a gap; a swap target gets a solid ring, the tiles of
+    a whole-group target (and of the extras when a template shot's photo would ask first) a dashed ring. While a photo
+    is lifted or springing home the scroller reaches 48 px above and below the strip so the tile is not cut; idle it is
+    exactly the strip (LV6·C1(a) unchanged).
+11. The auto-scroll runs wherever the finger is vertically (PH9.2 names no band for it).
+12. `[30,40,60]` is given at the drop and at the confirmation's "Move", never at the release that opens the
+    confirmation.
+13. `applyDrop` leaves `counts` and `current` as the Mac gave them (only the strips read the pending arrangement).
+14. The 8 s timer starts at the drop and is the only bound: it also ends a wait whose move succeeded but whose
+    re-read never came back.
+15. *Second finger:* counted per strip. It cancels and starts nothing itself; a new first finger (a primary pointer)
+    forgets any finger whose release was never seen, so a lost release cannot leave a strip dead.
+16. The arrangement key is stored at lift (PH9.2), so a change of the photos ends a lifted or dragged photo; a touch
+    still only pressing has no stored key and stays a tap or lift on what is then on screen.
+17. A strip that stops taking touches under a finger (a drawer or the confirmation opening) cancels as well.
+18. U1: `set_after_take_out` runs only when the photo's session is the active one (the route guards that already).
+    An unknown `to` is a body that does not parse: 400 `invalid_value`.
+
+**Deviations.**
+1. **One more LV3 test changed than the plan lists:** `lv3_c23b_the_preview_stays_open_on_the_image_in_its_new_place`
+   (`lv3_drawers.test.tsx`) ended with "a Delete button is shown" for an extra; LV-D20 (4) / LV8·C8(e) remove that
+   button, so the line now asserts an extra has no Retake. The plan's list (`lv3_c22c` removed, `lv3_c21a/b`,
+   `lv6_c5a`, `lv6_c2c` removed) is otherwise exactly what changed.
+2. **`cargo test --workspace` ran detached, once**, with its output in a file, against the wrapper's "never in the
+   background": this harness ends a foreground command after 10 minutes and I expected the first run after a rebuild
+   to be longer (flow §4A: "about 9 minutes warm, more right after a rebuild"). It took 5 min 4 s, so it would have
+   fitted. No other cargo command ran while it did; I waited for it.
+3. `docs/guide/02_architecture.md` also describes the phone client (`arrange.ts`, the strip's state machine), added
+   with U3 (flow §7A); the plan names that file only for U1.
+4. `phone.css` changed in U4 too (one stacking rule added in U3 was removed); `__tests__/helpers.ts` gained the two
+   fixtures (`sortSession`, `dragSession`) beside the helpers the plan names.
+5. Actor `fable` (the plan's `implementer: fable`), not the prompt's `codex`.
+
+**Observations for the reviewer.**
+- Red baseline: captured for U4 only (before its code: `lv8_c14b`, `c14c`, `c14e`, `c15d`, `c15e` failed, 7 passed on
+  U3's behaviour). U1–U3's tests were written with their code; no red baseline exists for them.
+- `lv8_c15a` holds the read that follows the Mac's answer (the fake answers the move and holds what comes next), so
+  the strip keeping the drop between the answer and that read is asserted, not only the end state.
+- U1's fixture leaves "Move image" steps in the history (the three extras are made by `ExtraEnd`), so a label alone
+  cannot show a new step: `lv8_c1a` and `lv8_c3a` undo once and check what came back; the "nothing changes" rows undo
+  once and check the fixture's last step came back instead. (`lv8_c1a`'s undo lines were added after the full Rust
+  run; only `lv8_phone_sort::` was re-run for them, 14 passed.)
+- Events in U1 rows are the `PhotoChanged` / `SessionChanged` sequence; the `HistoryChanged` every recorded step emits
+  is left out of the comparison for the rows that change something and counted for the rows that must change nothing.
+- Nothing was seen on a phone or in a browser in this session: every row is proven in jsdom on markup, inline styles
+  and requests. The lifted look, the 48 px reach of the scroller, the hint and the sheet are CSS by reasoning; iOS
+  long-press behaviour on the strip (callout, selection) relies on the rules LV6 already had
+  (`touch-action: none`, `-webkit-touch-callout: none`, `user-select: none`, images without pointer events). The
+  manual try-out is the first real check.
+- Candidate note: a photo with no preview yet does not follow the finger in a swipe (assumption 6); making it follow
+  needs `PhotoImage` to pass its style to the placeholder.
+
+**Closing gate (once, in the plan's order; tree = `c7824ab9` plus the two test-only edits of the closing commit).**
+`npm run build` exit 0 · `cargo test --workspace` exit 0, 2774 passed, 0 failed (LV6's stamp 2760 + this phase's 14) ·
+`cargo clippy --workspace --all-targets -- -D warnings` exit 0 · `cargo fmt --all -- --check` exit 0 ·
+`tools/sidecar/build.sh --stub --test` exit 0 (2 of 2) · `npm run typecheck` exit 0 · `npm test` exit 1: 1135 passed,
+**1 failed: `src/features/workspace/__tests__/p33_split_grid.test.tsx` C4(d)**, the known intermittent suite flake of
+`backlog.md` (P35 → P33: its 1 s `waitFor` runs out under full-suite load; here at 1049 ms). No file under
+`src/features` changed in this milestone; that file re-run alone: 7 of 7 passed. Phone tests: 14 files, 181 passed.

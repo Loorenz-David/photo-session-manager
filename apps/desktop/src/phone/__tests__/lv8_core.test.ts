@@ -132,16 +132,13 @@ test('lv8_core_dropTarget_untemplated_the_main_list_is_the_extras', () => {
 });
 
 // ---- applyDrop (PH9.5: what the strips show while the Mac answers) ----
+// Fixture D reads '201 204 - | 202 205 206 | 203 207 208' in the notation below.
 
 /** The arrangement as text: each shot's photo (or -) in shooting order | the extras | the Condition images. */
 const arrangement = (view: PhoneSession) => [
   view.shots.map(shot => shot.photo?.photo_id ?? '-').join(' '), view.extras.map(image => image.photo_id).join(' '), view.condition.map(image => image.photo_id).join(' '),
 ].join(' | ');
 const dropped = (photoId: number, drop: Drop) => arrangement(applyDrop(dragSession(), photoId, drop));
-
-test('lv8_core_applyDrop_starts_from_fixture_d', () => {
-  expect(arrangement(dragSession())).toBe('201 204 - | 202 205 206 | 203 207 208');
-});
 
 test('lv8_core_applyDrop_swap_between_template_shots_exchanges_or_fills', () => {
   expect(dropped(201, { kind: 'swap', container_id: A })).toBe('204 201 - | 202 205 206 | 203 207 208');

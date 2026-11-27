@@ -363,6 +363,11 @@ fn lv8_c1a_a_condition_photo_goes_to_the_end_of_main() {
         f.changes(),
         vec![Told::Photo(k2), Told::Photo(k3), Told::Session(f.s)]
     );
+    // The step is the classify's own (the fixture left "Move image" steps too): one undo takes
+    // exactly it back.
+    assert_eq!(f.a.history().undo(f.s).unwrap().label, "Move image");
+    assert_eq!(f.group(C::Condition), vec![k1, k2, k3]);
+    assert_eq!(f.group(C::Main), vec![ids.p, ids.q, e1, e2, e3]);
 }
 
 #[test]
