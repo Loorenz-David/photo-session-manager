@@ -121,6 +121,17 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
   - Owner during LV6: lock swipe halved (LV-D19 (3), row LV6·C3(b)). **LV6 APPROVED** (17:52, review r1, no fix; lock 55 px
     made it in). SDK sidecar rebuilt; release bundle built from `3c403e05` and **installed** (previous kept as
     "2026-11-26 live LV1-LV3"). Pushed.
+  - **LV4 resumed (2026-11-26 ~18:05 local) on the fixed build.** Re-check: LV-D19 dock (bigger tiles, scroll, single
+    tap) PASS; lock swipe 55 px PASS; tile picture appears by itself PASS; Mac Deny/undo and reorder reach both phones
+    PASS (F3 fixed); Focus Area Wide message PASS (F5 fixed). Exposure readout: Mac parses it now (no "unparsable"),
+    but the owner saw no readout on live.
+  - **Owner change requests (to fix after the check, with the other findings):**
+    - **R1 exposure readout off the live view:** "i don't really need it in the live view mode this can be placed on a
+      drawer … the bottom drawer that pops out" → show it in the phone's drawer, not over live (and make it actually
+      show: it did not appear).
+    - **R2 a quiet loading cue on a tile whose picture is arriving:** "while the picture is arriving i see the gray
+      picture i would like to see some small loading animation that doesn't disturb (like gradient loading … slightly,
+      so it doesn't look like i have to wait to take the next picture)".
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
