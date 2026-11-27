@@ -99,11 +99,39 @@ pub struct MoveBody {
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MoveTargetDto {
-    Container { container_id: i64 },
-    MainPosition { position: i64 },
+    Container {
+        container_id: i64,
+    },
+    MainPosition {
+        position: i64,
+    },
     ExtraEnd,
-    Condition { position: i64 },
+    Condition {
+        position: i64,
+    },
     ConditionEnd,
+    /// PH4a: put an extra at place `index` among the extras (1-based).
+    ExtraInsert {
+        index: i64,
+    },
+    /// PH4a: put a Condition photo at place `index` among them (1-based).
+    ConditionInsert {
+        index: i64,
+    },
+}
+
+/// `POST /photos/<id>/classify` (PH4a).
+#[derive(Debug, Deserialize)]
+pub struct ClassifyBody {
+    pub session_id: i64,
+    pub to: ClassifyToDto,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClassifyToDto {
+    Main,
+    Condition,
 }
 
 /// `GET /hello`.

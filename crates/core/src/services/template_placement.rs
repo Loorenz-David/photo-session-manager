@@ -879,6 +879,18 @@ pub enum MoveTarget {
     Condition(i64),
     /// After every Condition photo.
     ConditionEnd,
+    /// PH4a: an extra (or a Main photo of an untemplated session) is taken out and put back at
+    /// this place among the extras (1-based, its place after the move); the others keep their order.
+    ExtraInsert(i64),
+    /// PH4a: the same among the Condition photos.
+    ConditionInsert(i64),
+}
+
+/// PH4a: the group the phone's swipe (or a drop into the other group) sends a photo to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassifyTo {
+    Main,
+    Condition,
 }
 
 /// Where a photo is in the phone's model of the session.
@@ -888,19 +900,86 @@ enum Spot {
     Condition(usize),
 }
 
+/// Where a photo is before a move: in a template container, among the extras (every Main photo
+/// of an untemplated session), or in Condition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Whence {
+    Container,
+    Extra,
+    Condition,
+}
+
+/// What a move does with its destination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Act {
+    /// The photo swaps with whatever is at the spot (nothing → it moves there).
+    Swap(Spot),
+    /// The photo is taken out of its group and put back at the spot.
+    Insert(Spot),
+    /// The photo goes to the end of the extras or of Condition.
+    End,
+}
+
+/// What a committed move did: the session, the undo step (none when nothing changed) and the
+/// template container the photo left empty, if it left one.
+struct Moved {
+    session_id: i64,
+    step: Option<Step>,
+    emptied: Option<i64>,
+}
+
 /// Card LV8: the phone's Move. To a Main position → the photo swaps with whatever is there
 /// (nothing → it moves); `ExtraEnd` → Main after the containers; `Condition(j)` → it swaps with
 /// condition photo `j` (a Main photo gives its Main place to that photo); `ConditionEnd` → appended
 /// to Condition. Every photo whose place changes is placed by hand (10G §6 rule 1); compositions are
 /// not touched. One transaction, one undo step "Move image". Never replaces (the Mac's drop does).
 /// An untemplated session has no containers (`Container` → `no_template`).
+///
+/// PH4a: `ExtraInsert(i)` / `ConditionInsert(i)` take the photo out of its own group and put it
+/// back at place `i` (positions only: no place row changes); a source outside that group or an
+/// `i` outside `1..=group length` → `invalid_value`; the same place → nothing changes.
 pub fn move_to(h: &HandAction<'_>, photo_id: i64, target: MoveTarget) -> Result<ReviewResult> {
+    let moved = move_photo(h, photo_id, &|_| Some(target))?;
+    h.finish(moved.session_id, moved.step)
+}
+
+/// PH4a: the phone's classify. **To Main:** a Condition photo → Main at the end (as `ExtraEnd`); a
+/// photo in a template container → an extra at the end; an extra (any Main photo of an
+/// untemplated session) → nothing changes. **To Condition:** a Main photo → Condition at the end
+/// (as `ConditionEnd`); a Condition photo → nothing changes. Any other photo state →
+/// `invalid_value`. A container the photo left empty becomes the current shot of the active
+/// session (as Retake's), after the commit and before the announcement, so the phone's re-read
+/// sees both. One undo step "Move image"; undo does not restore the current shot (CS1: memory).
+pub fn classify_to(h: &HandAction<'_>, photo_id: i64, to: ClassifyTo) -> Result<ReviewResult> {
+    let moved = move_photo(h, photo_id, &|origin| match (to, origin) {
+        (ClassifyTo::Main, Whence::Extra) | (ClassifyTo::Condition, Whence::Condition) => None,
+        (ClassifyTo::Main, _) => Some(MoveTarget::ExtraEnd),
+        (ClassifyTo::Condition, _) => Some(MoveTarget::ConditionEnd),
+    })?;
+    if let (Some(_), Some(container_id)) = (&moved.step, moved.emptied)
+        && h.store.active_session_id()? == Some(moved.session_id)
+    {
+        h.shots.set_after_take_out(moved.session_id, container_id);
+    }
+    h.finish(moved.session_id, moved.step)
+}
+
+/// The one transaction behind `move_to` and `classify_to`: reads the phone's model of the
+/// session, asks `choose` where the photo goes given where it is (`None` → nothing changes),
+/// and writes the result.
+fn move_photo(
+    h: &HandAction<'_>,
+    photo_id: i64,
+    choose: &dyn Fn(Whence) -> Option<MoveTarget>,
+) -> Result<Moved> {
     crate::services::retention::ensure_photo_not_cleared(h.store, photo_id)?;
     let at = h.clock.now_ms();
     let mut session_id = 0;
     let mut step = None;
+    let mut emptied = None;
     h.store.transaction(&mut |tx| {
         step = None;
+        emptied = None;
         let moved = tx.photo(photo_id)?;
         session_id = moved.session_id;
         let template = template_of(tx, session_id)?;
@@ -944,42 +1023,80 @@ pub fn move_to(h: &HandAction<'_>, photo_id: i64, target: MoveTarget) -> Result<
                 .map(|n| n - 1)
                 .ok_or_else(|| Error::InvalidValue(format!("no Main position {n}")))
         };
-        let destination = match target {
+        let origin = match source {
+            Spot::Main(i) if i < slots => Whence::Container,
+            Spot::Main(_) => Whence::Extra,
+            Spot::Condition(_) => Whence::Condition,
+        };
+        let Some(target) = choose(origin) else {
+            return Ok(());
+        };
+        // A 1-based place in a group of `len` photos, as an index.
+        let place_in = |n: i64, len: usize, group: &str| -> Result<usize> {
+            usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=len).contains(n))
+                .map(|n| n - 1)
+                .ok_or_else(|| Error::InvalidValue(format!("no {group} position {n}")))
+        };
+        let act = match target {
             MoveTarget::Container(n) => {
                 if template.is_none() {
                     return Err(Error::NoTemplate);
                 }
-                Some(Spot::Main(finals.iter().position(|f| *f == n).ok_or_else(
+                Act::Swap(Spot::Main(finals.iter().position(|f| *f == n).ok_or_else(
                     || Error::InvalidValue(format!("no container {n}")),
                 )?))
             }
-            MoveTarget::MainPosition(n) => Some(Spot::Main(main_index(n, main.len())?)),
-            MoveTarget::Condition(n) => Some(Spot::Condition(
-                usize::try_from(n)
-                    .ok()
-                    .filter(|n| (1..=cond.len()).contains(n))
-                    .map(|n| n - 1)
-                    .ok_or_else(|| Error::InvalidValue(format!("no Condition position {n}")))?,
-            )),
-            MoveTarget::ExtraEnd | MoveTarget::ConditionEnd => None,
+            MoveTarget::MainPosition(n) => Act::Swap(Spot::Main(main_index(n, main.len())?)),
+            MoveTarget::Condition(n) => {
+                Act::Swap(Spot::Condition(place_in(n, cond.len(), "Condition")?))
+            }
+            MoveTarget::ExtraEnd | MoveTarget::ConditionEnd => Act::End,
+            MoveTarget::ExtraInsert(n) => {
+                if origin != Whence::Extra {
+                    return Err(Error::InvalidValue(
+                        "only a Main photo outside the template can be put among them".into(),
+                    ));
+                }
+                Act::Insert(Spot::Main(
+                    slots + place_in(n, main.len() - slots, "extra")?,
+                ))
+            }
+            MoveTarget::ConditionInsert(n) => {
+                if origin != Whence::Condition {
+                    return Err(Error::InvalidValue(
+                        "only a Condition photo can be put among them".into(),
+                    ));
+                }
+                Act::Insert(Spot::Condition(place_in(n, cond.len(), "Condition")?))
+            }
         };
-        if destination == Some(source) {
+        if act == Act::Swap(source) || act == Act::Insert(source) {
             return Ok(());
         }
-        match (target, destination, source) {
-            (_, Some(Spot::Main(i)), Spot::Main(j)) => main.swap(i, j),
-            (_, Some(Spot::Main(i)), Spot::Condition(j)) => match main[i].replace(photo_id) {
+        match (act, source) {
+            (Act::Swap(Spot::Main(i)), Spot::Main(j)) => main.swap(i, j),
+            (Act::Swap(Spot::Main(i)), Spot::Condition(j)) => match main[i].replace(photo_id) {
                 Some(other) => cond[j] = other,
                 None => {
                     cond.remove(j);
                 }
             },
-            (_, Some(Spot::Condition(k)), Spot::Condition(j)) => cond.swap(k, j),
-            (_, Some(Spot::Condition(k)), Spot::Main(j)) => {
+            (Act::Swap(Spot::Condition(k)), Spot::Condition(j)) => cond.swap(k, j),
+            (Act::Swap(Spot::Condition(k)), Spot::Main(j)) => {
                 main[j] = Some(cond[k]);
                 cond[k] = photo_id;
             }
-            (MoveTarget::ExtraEnd, None, from) | (MoveTarget::ConditionEnd, None, from) => {
+            (Act::Insert(Spot::Main(i)), Spot::Main(j)) => {
+                let photo = main.remove(j);
+                main.insert(i, photo);
+            }
+            (Act::Insert(Spot::Condition(k)), Spot::Condition(j)) => {
+                let photo = cond.remove(j);
+                cond.insert(k, photo);
+            }
+            (Act::End, from) => {
                 match from {
                     Spot::Main(j) => main[j] = None,
                     Spot::Condition(j) => {
@@ -994,6 +1111,14 @@ pub fn move_to(h: &HandAction<'_>, photo_id: i64, target: MoveTarget) -> Result<
             }
             _ => return Err(Error::InvalidValue("unknown move".into())),
         }
+        // The template container the photo left with nothing in it.
+        let left_empty = match source {
+            Spot::Main(j) if j < slots && main[j].is_none() => template
+                .as_ref()
+                .and_then(|t| t.containers.iter().find(|c| c.final_no == finals[j]))
+                .map(|c| c.id),
+            _ => None,
+        };
         // Extras (and an untemplated Main list) are compacted.
         let mut extras: Vec<i64> = main.split_off(slots).into_iter().flatten().collect();
         let wanted: Vec<(i64, Classification, Option<i64>, i64)> = main
@@ -1073,9 +1198,14 @@ pub fn move_to(h: &HandAction<'_>, photo_id: i64, target: MoveTarget) -> Result<
             changed.1,
             changed.2,
         ));
+        emptied = left_empty;
         Ok(())
     })?;
-    h.finish(session_id, step)
+    Ok(Moved {
+        session_id,
+        step,
+        emptied,
+    })
 }
 
 /// 10G §6 rule 3 (P10) under CS8: `old` is denied exactly as `ReviewService::delete` denies

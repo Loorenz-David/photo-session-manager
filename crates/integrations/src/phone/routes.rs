@@ -29,7 +29,7 @@ use psm_core::{
         live_view,
         phone_view::{self, phone_view},
         review::ReviewService,
-        template_placement::{self, HandAction, MoveTarget},
+        template_placement::{self, ClassifyTo, HandAction, MoveTarget},
     },
 };
 
@@ -41,8 +41,8 @@ use crate::{
         pairing::PhonePairings,
         server::Shared,
         wire::{
-            self, CurrentBody, FEATURES, FocusBody, Hello, MoveBody, MoveTargetDto, PairingRef,
-            RetakeBody, SessionBody,
+            self, ClassifyBody, ClassifyToDto, CurrentBody, FEATURES, FocusBody, Hello, MoveBody,
+            MoveTargetDto, PairingRef, RetakeBody, SessionBody,
         },
     },
 };
@@ -64,6 +64,7 @@ pub(crate) fn router(shared: Arc<Shared>) -> Router {
         .route("/api/phone/v1/current", post(current))
         .route("/api/phone/v1/retake", post(retake))
         .route("/api/phone/v1/photos/{id}/move", post(move_photo))
+        .route("/api/phone/v1/photos/{id}/classify", post(classify_photo))
         .route("/api/phone/v1/photos/{id}/delete", post(delete_photo))
         .route("/api/phone/v1/photos/{id}/preview", get(preview))
         .route("/api/phone/v1/containers/{id}/example", get(example))
@@ -476,8 +477,38 @@ async fn move_photo(
                 MoveTargetDto::ExtraEnd => MoveTarget::ExtraEnd,
                 MoveTargetDto::Condition { position } => MoveTarget::Condition(position),
                 MoveTargetDto::ConditionEnd => MoveTarget::ConditionEnd,
+                MoveTargetDto::ExtraInsert { index } => MoveTarget::ExtraInsert(index),
+                MoveTargetDto::ConditionInsert { index } => MoveTarget::ConditionInsert(index),
             };
             template_placement::move_to(&hand(h), photo_id, target)?;
+            Ok(OK())
+        },
+    )
+    .await
+}
+
+/// PH4a: the phone's swipe to Main or to Condition (and a drop into the other group).
+async fn classify_photo(
+    State(shared): Shared_,
+    headers: HeaderMap,
+    RawQuery(q): RawQuery,
+    UrlPath(photo_id): UrlPath<i64>,
+    bytes: axum::body::Bytes,
+) -> Response {
+    let route = "/api/phone/v1/photos/{id}/classify";
+    api(
+        shared,
+        route,
+        token_of(&headers, q.as_deref()),
+        move |h, _| {
+            let b: ClassifyBody = body(&bytes)?;
+            guard(h, b.session_id)?;
+            phone_view::session_photo(h.store.as_ref(), Some(b.session_id), photo_id)?;
+            let to = match b.to {
+                ClassifyToDto::Main => ClassifyTo::Main,
+                ClassifyToDto::Condition => ClassifyTo::Condition,
+            };
+            template_placement::classify_to(&hand(h), photo_id, to)?;
             Ok(OK())
         },
     )

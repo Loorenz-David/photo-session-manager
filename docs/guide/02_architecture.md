@@ -175,7 +175,7 @@ wrapper `services/search.ts`. Saved pages:
   (`match_late_exposure`) gives the exposure its own binding and nothing advances. A file with no slot owner and an
   unbound place row (Capture One tether, a file no shutter matched) is bound at arrival on its `photo_places` row
   (`bind_arrival`, inside `place_arrival`'s transaction). Lock order everywhere: store transaction, then the held
-  value. Logs `current_shot.bound session= exposure= container=` and `current_shot.set … by=phone|retake|advance|default`.
+  value. Logs `current_shot.bound session= exposure= container=` and `current_shot.set … by=phone|retake|advance|default|classify`.
 - **Placement on arrival (T2, by binding since LV2).** `ArrivalService::accept` → `template_placement::place_arrival`
   (one transaction; an error is logged and the photo stays where P66 put it). `current_shot::shot_plan` sorts the
   session's unreleased shots and holds by time (`mechanisms::shot_order::slot_owners`: `order`'s counter-run
@@ -202,6 +202,16 @@ wrapper `services/search.ts`. Saved pages:
   place. Every template step stores each photo's whole state (place, row, composition, denial); undo restores it.
 - **Phone Move (LV2, card LV8).** `template_placement::move_to(h, photo, MoveTarget)` — the phone swaps (container or
   Main position), appends a new extra, swaps with or appends to Condition; never replaces; one step "Move image".
+- **Phone classify and insert moves (LV8, §5 PH4a; book 10J LV-D20).** `template_placement::classify_to(h, photo,
+  ClassifyTo::{Main, Condition})` is the phone's swipe (and its drop into the other group): to Main a Condition photo
+  or a template shot's photo becomes an extra at the end, an extra stays; to Condition a Main photo goes to the end, a
+  Condition photo stays ("stays" = no step, no event). `MoveTarget::ExtraInsert(i)` / `ConditionInsert(i)` take a photo
+  out of its own group and put it back at place `i` (positions only, no place row changes; a source outside the group
+  or an `i` outside `1..=len` is `invalid_value`). Both run `move_to`'s one transaction (`move_photo`: one model, one
+  step "Move image"), never `ReviewService::reorder` (that is the Mac's container semantics). When a classify takes a
+  photo out of a template container, `CurrentShots::set_after_take_out` makes that container current (as Retake's;
+  log `by=classify`) **after** the commit and **before** `HandAction::finish` announces, so a phone's re-read sees
+  both; undo does not restore the current shot (it is in memory).
 - **Commands** (`commands/templates.rs`): T1 `templates_list`, `template_get`, `template_create`,
   `template_delete`, `template_container_add`, `template_container_remove`,
   `template_container_example_set`, `template_containers_reorder`, `template_shooting_order_set`,
@@ -1018,7 +1028,8 @@ the direct adapter only.
 - **Routes (PH3, PH4; `phone/routes.rs`, wire in `phone/wire.rs`).** Static `/phone/`, `/assets/*`, `/phone/icon.png`
   (no token); token (`Authorization: Bearer` or `?pair=`) for `/phone/manifest.webmanifest` and `/api/phone/v1/*`:
   `hello`, `session` (`core/services/phone_view.rs::phone_view`), POST `capture`, `focus`, `focus/clear`,
-  `current`, `retake`, `photos/<id>/move`, `photos/<id>/delete` (each with the session guard: a non-active
+  `current`, `retake`, `photos/<id>/move` (LV8: also the kinds `extra_insert {index}`, `condition_insert {index}`),
+  `photos/<id>/classify {to: "main" | "condition"}` (LV8), `photos/<id>/delete` (each with the session guard: a non-active
   `session_id` is 409 `session_changed`), GET `photos/<id>/preview`, `containers/<id>/example`. Handlers only parse,
   check auth and the guard, call core services on a blocking thread and serialize (H8). Log
   `phone.request route= status= pairing=` (never the token).

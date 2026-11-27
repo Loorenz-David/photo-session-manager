@@ -334,6 +334,16 @@ impl CurrentShots {
         );
     }
 
+    /// PH4a (classify): after the move committed, the container the photo was taken out of becomes
+    /// current, as Retake's (CS1 moves it on when a shutter on the way has taken it meanwhile).
+    pub(crate) fn set_after_take_out(&self, session_id: i64, container_id: i64) {
+        *self.lock() = Some((session_id, Current::Shot(container_id)));
+        tracing::info!(
+            target: "psm::current_shot",
+            "current_shot.set session={session_id} container={container_id} by=classify"
+        );
+    }
+
     /// CS5: inserts the exposure row bound to the current shot of its (active, templated) session
     /// in one transaction, then moves the current shot on with the new exposure counted as a hold.
     /// A late match to a file that was bound at arrival (CS6) gives the exposure that binding and
