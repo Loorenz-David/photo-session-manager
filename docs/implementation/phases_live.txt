@@ -12,3 +12,5 @@ LV5_live_fixes
 LV6_phone_dock
 LV4_hardware_check
 LV7_tile_loading_cue
+# v1.2 (2026-11-27, LV-D20): LV8 sort and arrange on the phone, implementer: fable, after LV7 (master_plan_live.md §2, §9).
+LV8_phone_sort_and_arrange

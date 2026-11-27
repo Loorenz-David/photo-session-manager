@@ -155,6 +155,11 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     confirm for template-shot photos, up Condition), the Preview gets the strip, press-hold-lift drag and drop (swap
     between template shots, insert-and-shift among extra Main and among Condition); built from the description (no
     design prototype). Planner launched (`prompts/reviewer/live_sort_plan_r1.md`).
+  - **LV8 planned** (handoff `handoff_live_sort_plan_r1.md`, 0 cards): one Fable milestone, 4 units, 70 rows (server
+    classify/place route; Preview swipes + strip; lift-and-drag; reliability). Planner choices: cross-group drop = end
+    of the group (book 06), onto a template shot = swap; template photo to Main empties the shot and makes it current;
+    lift after 0.4 s still; swipe ≥ 96 px; optimistic drop with rollback, 8 s timeout. Owner: shimmer installs with LV8.
+    **LV8 started.**
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -163,7 +168,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- Planner for LV8 (sort and arrange, LV-D20), `.pipeline/runs/live_sort_plan_r1.log`, started 2026-11-27.
+- `tools/pipeline/run_phase.sh phase LV8_phone_sort_and_arrange` (Fable), started 2026-11-27.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).

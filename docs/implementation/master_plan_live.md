@@ -1,4 +1,10 @@
-# Live preview — master plan (v1, 2026-11-26; v1.1 2026-11-26: fix milestones LV5, LV6 after the paused hardware check)
+# Live preview — master plan (v1, 2026-11-26; v1.1 2026-11-26: fix milestones LV5, LV6 after the paused hardware check; v1.2 2026-11-27: LV8 sort and arrange, LV-D20)
+
+**v1.2 amendments (2026-11-27, planner, from book 10J LV-D20, changelog D20; the owner's request R3 after the
+hardware check):** §2 (LV7 recorded, LV8 added, totals), §3 (LV8 `implementer: fable`, its server unit), §4.2 and §4.3
+(classify, insert moves, `set_after_take_out`), §4.5 (phone files), §4.6 (`by=classify`), §4.7 (test stems), §5
+**PH4a** (new route and move targets) and **PH9** (the phone's sort and arrange rules), §6 (phone texts), §9. Nothing
+earlier is superseded.
 
 **v1.1 amendments (2026-11-26, planner, from the LV4 hardware check findings F1–F5, F7 and owner decision LV-D19;
 evidence `STATUS_live.md` §"LV4 hardware check in progress" and the app log `psm.2026-11-26.log`):** §2 (LV5, LV6 and
@@ -40,9 +46,15 @@ Milestone ids `LV1`…`LV4` are this track's; they are **not** 10J's card ids LV
 | `LV5_live_fixes` (v1.1) | hardware-check fixes: shutters on the way until the photo exists (F4); Mac actions announced to phones (F3); preview version (F7 server); a Wi-Fi stall skips frames (F2); Settings → Phone list current; Focus Area not movable reported (F5); exposure readout (F1) | 4 | 12 | 49 | default | no | LV3 | the photographer can try the fixes on the hardware (dock unchanged) |
 | `LV6_phone_dock` (v1.1) | LV-D19: dock without hold gestures (larger tiles, scroll, single tap); pictures never broken (F7 phone); removed text | 2 | 6 | 13 | **fable** | no | LV5 | the dock as the owner asked; tile pictures appear when ready |
 | `LV4_hardware_check` | owner-attended: M-LV1…M-LV6 and the "at hardware acceptance" items on the packaged app (paused 2026-11-26 part-way; resumes after LV6) | 3 | 20 | 20 | — (owner + orchestrator) | no | LV3 (resumes after LV6, §9) | measured evidence; M-LV6 targets set by the owner |
+| `LV7_tile_loading_cue` (v1.2, recorded; planned by the orchestrator 2026-11-27, owner request R2) | a quiet loading sweep on a waiting tile | 1 | 3 | 4 | **fable** | no | LV6 | the tile shows the photo is on its way |
+| `LV8_phone_sort_and_arrange` (v1.2, LV-D20) | U1 the Mac's classify route and insert moves (PH4a); U2 the Preview's swipes, confirmation and strip; U3 press-hold-lift drag and drop in both strips; U4 cancels, the drop shown at once, rollback (PH9) | 4 | 15 | 70 | **fable** | no | LV7 | the photographer sorts and arranges a session's photos from the phone |
 
 Totals (computed from the plan files by `grep`, v1.1): 6 milestones, 22 units, 113 criteria, 329 rows; every unit has
-at most 8 criteria. (v1 read 4 milestones, 15 units, 91 criteria, 261 rows; LV3's U0 had not been counted.) Each
+at most 8 criteria. (v1 read 4 milestones, 15 units, 91 criteria, 261 rows; LV3's U0 had not been counted.) **v1.2:**
+rows counted as the lines matching `^| LV<n>·C<k>(<row>)` in each plan file (`grep -c`), criteria as the distinct
+`LV<n>·C<k>` among them: LV1 17/61, LV2 29/101, LV3 29/83, LV4 20/20, LV5 12/49, LV6 6/14, LV7 3/4, LV8 15/70 →
+8 milestones, **131 criteria, 402 rows** (the plan files win over this table: LV3's own table says 85 rows, LV6's 13;
+grep finds 83 and 14). Each
 milestone needs the one before approved (its `depends_on`; gate = the **Tracker** line of that plan
 file). Start each with `tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list. `LV4` is never dispatched
@@ -62,7 +74,10 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   `LV2` (sidecar, hub, backend, server, the small Settings page) use the default implementer and **never** carry
   `implementer: fable` (guide: no Fable on camera phases). Reviewer Opus. **v1.1:** `LV6_phone_dock` (phone UI only)
   carries `implementer: fable`; `LV5_live_fixes` (sidecar C++, core, server, the small Settings list) uses the default
-  implementer and never carries it.
+  implementer and never carries it. **v1.2:** `LV8_phone_sort_and_arrange` carries `implementer: fable`; its first unit
+  is a small server change (one core function and two move variants in `template_placement`, one route; no camera
+  code, no schema), kept in the milestone rather than a separate default-implementer milestone because a second review
+  cycle would cost more than the change (planning prompt `prompts/reviewer/live_sort_plan_r1.md` allows it).
 - **Projection off for LV5 and LV6 too (v1.1).** The two externally owned shapes in LV5 are grounded, not invented: the
   helper's `liveview.exposure` line is quoted from the hardware log, and the Focus Area values are the installed SDK's
   enum (`CrDeviceProperty.h:1456–1485` in the lab's SDK 2.02); the rest are this repo's shapes.
@@ -141,6 +156,10 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   `move_to(h, photo_id, MoveTarget)` with `MoveTarget {Container(i64 /*final_no*/), MainPosition(i64), ExtraEnd,
   Condition(i64), ConditionEnd}`; `HandAction` + `shots: &CurrentShots`; `place_arrival` + `shots: &CurrentShots`;
   removed: `gaps`, `gap_for_arrival`, `take_shot_key`, `next_shot` (index-based), `expected_place(index, …)`.
+  **v1.2 (LV8, PH4a):** `MoveTarget` + `ExtraInsert(i64)`, `ConditionInsert(i64)` (1-based place in the group after the
+  move); new `classify_to(h, photo_id, ClassifyTo) -> Result<ReviewResult>` with `ClassifyTo {Main, Condition}`.
+  `src/services/current_shot.rs`: `CurrentShots::set_after_take_out(session_id, container_id)` (as `set_after_retake`,
+  log `by=classify`).
 - New `src/services/phone_view.rs`: `phone_view(store, shots, default_shape, session_id) -> PhoneSessionView` (PH6).
 - Domain: `ShotBinding {container_id: Option<i64>}` (`None` = bound to no container → Condition) in
   `src/domain/template.rs`; `NewExposure` and `Exposure` + `shot: Option<ShotBinding>`; `PlaceRow` + `shot:
@@ -166,7 +185,9 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   (`PhoneServer::start(config, handles: Arc<dyn Fn() -> Result<AppHandles> + Send + Sync>, hub)`, `rebind(port)`,
   `stop()`; `PhoneTimings {ping: 5 s, idle_close: 15 s, write_timeout: 2 s}` — **superseded v1.1 (F2, PH5a):**
   `PhoneTimings {ping: 5 s, idle_close: 15 s, stall_close: 15 s}`, `write_timeout` removed), `auth.rs`, `routes.rs`,
-  `ws.rs`, `wire.rs` (DTOs, frame header, `error_code`), `web_root.rs`.
+  `ws.rs`, `wire.rs` (DTOs, frame header, `error_code`), `web_root.rs`. **v1.2 (LV8):** `wire.rs` `ClassifyBody
+  {session_id, to: "main" | "condition"}`, `MoveTargetDto` + `ExtraInsert {index}`, `ConditionInsert {index}`;
+  `routes.rs` handler `classify_photo` for PH4a's route.
 - Dependencies: `qrcode = { version = "0.15", default-features = false, features = ["svg"] }` (integrations);
   `axum` gains feature `"ws"` (infra's line `axum = "0.8"` → `axum = { version = "0.8", features = ["ws"] }`, and
   integrations depends on `axum` the same way); testkit dev-dependencies `tokio-tungstenite` (the version axum's `ws`
@@ -196,12 +217,17 @@ INTEGER, revoked_at INTEGER)`. Store trait (`crates/core/src/ports/store.rs`) ga
   maps `../dist/` → `phone-web/`; the server's web root is `<Resources>/phone-web` in the packaged app, `PSM_PHONE_WEB`
   when set, else `apps/desktop/dist` in debug builds (`web_root.rs`).
 - HTTP routes and WebSocket messages: §5 PH.
+- **v1.2 (LV8):** new `apps/desktop/src/phone/arrange.ts` (`dropTarget`, `applyDrop`, `arrangementKey`, `nextPhoto`,
+  `swipeAction`; PH9) and `components/ConfirmSheet.tsx`; `gestures.ts` gains `SWIPE {holdMs: 200, startPx: 14, commitPx:
+  96, hintPx: 24}`, `DRAG {liftMs: 400, liftScale: 1.15, bandPx: 48, edgePx: 40, scrollStepPx: 8, scrollTickMs: 16,
+  pendingMs: 8000}`, `HAPTIC.lift = 12`, `HAPTIC.dragTick = 6`; `api.ts` gains `classifyPhoto` and the two move
+  kinds; `Dock.tsx` serves both strips (`testId` `dock` on the live screen, `preview-strip` in the Preview).
 
 ### 4.6 Log lines (never a token)
 `live.source start= link= frames_10s= repeats_10s= errors_10s=` · `live.viewer viewer= pairing= live= visible=
 sent_10s= skipped_10s=` · `live.stop reason=` · `focus.request focus= x= y= af=` · `focus.result focus= outcome= ms=`
 · `current_shot.bound session= exposure= container=` (`container=none` for Condition) · `current_shot.set session=
-container= by=phone|retake|advance|default` · `phone.server listening port= addresses=` · `phone.server error=` ·
+container= by=phone|retake|advance|default` (v1.2: also `by=classify`, PH4a) · `phone.server listening port= addresses=` · `phone.server error=` ·
 `phone.request route= status= pairing=` · `phone.viewer opened|closed viewer= pairing= reason=` (v1.1: close reasons
 `open`, `closed`, `idle`, `write`, `revoked`, `overflow`, **`stalled`**; `write_timeout` no longer occurs, PH5a).
 
@@ -222,6 +248,11 @@ changed because the behaviour they encoded changed (each listed in its milestone
 `lv1_frame_channel.rs::lv1_c15b_exposure_mapping` (an invented exposure shape → the helper's real line, LV5·C12(b));
 the `PhoneTimings` literals in `lv2_phone_ws.rs` and `crates/testkit/src/phone.rs`; six LV3 dock tests removed and
 `lv3_c1c_…` re-texted (LV6, listed in `plans/LV6_phone_dock.md`).
+**v1.2 (LV8):** Rust stem `lv8_phone_sort.rs`; UI `apps/desktop/src/phone/__tests__/{lv8_core.test.ts, lv8_swipe.test.tsx,
+lv8_drag.test.tsx, lv8_drag_reliability.test.tsx}`. Tests removed or changed because LV-D20 changed their behaviour
+(listed in `plans/LV8_phone_sort_and_arrange.md`): `lv3_c22c_…` removed (no Delete button), `lv6_c2c_…` removed (a long
+press on a photo tile lifts), `lv3_c21a_…`/`lv3_c21b_…` (the hold starts after 200 ms), `lv6_c5a_…` (assertion scoped to
+the viewport).
 
 ## 5. Contracts (stand in for the mechanism inventory; plans implement them verbatim)
 
@@ -445,6 +476,21 @@ phone's CSS filter, H3). **Session guard:** every POST's `session_id` must be th
 `session_changed` and nothing happens (a tap racing a Mac switch never acts on the wrong session). Later (LV-D18) a
 `POST /api/phone/v1/sessions/<id>/complete` or `/open` and a new `features` entry are added without changing these.
 HTTPS later = the same paths; the phone derives `ws:`/`wss:` and all URLs from `location` (card LV3).
+**PH4a Sort and arrange routes (added 2026-11-27, v1.2, LV-D20; LV8·U1).** `POST /api/phone/v1/photos/<id>/classify
+{session_id, to: "main" | "condition"}` → `{ok: true}`, core `template_placement::classify_to` (same guard,
+`session_photo` 404 and errors as the move route). **To Main:** a Condition photo → Main at the end (as `ExtraEnd`); a
+photo in a template container → an extra at the end and that container becomes current; a Main photo outside the
+template (or any Main photo of an untemplated session) → nothing changes. **To Condition:** a Main photo → Condition at
+the end (as `ConditionEnd`); from a container, that container becomes current; a Condition photo → nothing changes.
+Any other photo state → `invalid_value`. The current shot after a take-out = `CurrentShots::set_after_take_out(s, c)`
+(as Retake's; CS1 moves it on if `c` is taken), set after the commit and **before** the announcement. "Nothing
+changes" = 200, no undo step, no event. Move targets added to `POST /photos/<id>/move`: `{kind: "extra_insert",
+index}` (the source is an extra, or a Main photo of an untemplated session) and `{kind: "condition_insert", index}`
+(the source is a Condition photo): the photo is taken out of its group and put back so that it is at `index` (1-based,
+`1..=group length`), the others keep their order; positions only (no place row changes, as the Condition swap); a
+source outside that group or an index out of range → `invalid_value`; the same place → nothing changes. One undo step
+"Move image" for every change; PH8 announcements through `HandAction::finish`. `ReviewService::reorder` is **not** used
+(it puts a Main photo by hand into slot = position, the Mac's container semantics). Every other PH4 route unchanged.
 **PH5 WebSocket** `GET /api/phone/v1/ws?pair=<token>` (auth before upgrade: 401). Server → phone **text**:
 `{type: "hello", viewer_id}` · `{type: "session", session_id: <id>|null, rev}` (on `ActiveSessionChanged`,
 `SessionChanged`, `PhotoAdded`, `PhotoChanged` of the active session; `rev` increases; the phone re-reads `GET
@@ -507,6 +553,68 @@ it changed. Emitters: `ReviewService` (`classify` incl. restore from Deleted, `r
 session in the step's touched set); `HandAction::finish`, `CurrentShots`, the preview step and arrival as today. Tauri
 commands and HTTP handlers never emit (H8); the phone's delete uses the same announcing path as the Mac's (no double
 event).
+**PH9 Sort and arrange on the phone (added 2026-11-27, v1.2, LV-D20; LV8·U2–U4).** The phone's client rules; the Mac's
+are PH4a. Names in §4.5.
+- **PH9.1 Swipe (the Preview's picture).** A touch is `pressing`; a move of more than `SWIPE.startPx` (14 px, in the
+  picture's own coordinates as every Preview gesture, so a sideways-held long shot swipes along its picture) within
+  `holdMs` (200 ms) → `swiping`, the axis decided once: `|dx| > |dy|` → horizontal (left/right by the sign of `dx` at
+  release), `dy < 0` and `|dy| ≥ |dx|` → up, otherwise (down) → no action. A template shot's photo held within 14 px
+  for 200 ms → `holding` (its template shows, LV3; sideways sets the overlay; no swipe until release). In `swiping` the
+  picture follows the finger along the axis and a hint shows the outcome. Release with the distance along the
+  direction ≥ `commitPx` (96) → commit; shorter, `pointercancel`, page hidden or `blur` → cancelled (springs back, no
+  request). `swipeAction(subject, direction)`:
+
+  | subject \ direction | left | right | up |
+  |---|---|---|---|
+  | a template shot's photo | `retake` (POST `/retake`) | `main_confirm` (the confirmation; Move → classify main) | `condition` (classify) |
+  | an extra Main photo (untemplated: any Main photo) | `delete` (POST `/photos/<id>/delete`) | `none` ("ALREADY MAIN") | `condition` |
+  | a Condition photo | `delete` | `main` (classify) | `none` ("ALREADY CONDITION") |
+
+  A commit with an action sends its request and the Preview shows `nextPhoto(view, id)` **at once** (the photos in the
+  strip's order — template shots with a photo in shooting order, extras, Condition — the one after it; none → the
+  Preview closes), then the toast and the haptic (§6). A refusal goes through the phone's `refused` (toast by code,
+  re-read); the Preview does not go back.
+- **PH9.2 Lift and drag (both strips).** `idle → pressing → tap | scrolling | moved | lifted`; `lifted → dragging →
+  dropping | cancelled`; `dropping → idle` at PH9.5's ends; `cancelled → idle`. `pressing`: a pointer down on a tile,
+  captured. More than `DOCK.tapPx` (8) sideways before `liftMs` (400) → `scrolling` (LV6); more than 8 vertically →
+  `moved`; release within 8 px before 400 ms → tap (LV6's rules). 400 ms within 8 px on a tile **with a photo** and no
+  drop pending → `lifted`: homes measured, the `arrangementKey` stored, `vibrate(12)`. A tile without a photo never
+  lifts (its release is a tap). Lifted or dragging: the tile follows the finger; the target (PH9.3) is recomputed on
+  every move and every auto-scroll step; `vibrate(6)` when it changes to a different non-null target; within `edgePx`
+  (40) of the strip's visible left or right edge `scrollLeft` moves 8 px toward that edge every 16 ms, clamped to
+  `[0, scrollWidth − clientWidth]`. Release: a null target → cancelled; `main_confirm` → cancelled and the
+  confirmation opens (Move → classify main, then PH9.5 as a drop); otherwise `dropping`: the request,
+  `vibrate([30,40,60])`. No HTML5 drag and drop anywhere.
+- **PH9.3 Targets.** Homes = each tile's rectangle in content coordinates (client left + `scrollLeft`), measured **once,
+  at lift**, never during the drag (tiles sliding aside move on screen, not their homes). Finger x = `clientX` − strip
+  left + `scrollLeft`. In band = finger y within [strip top − `bandPx` (48), strip bottom + 48]; outside → null. Over
+  tile `t` = `|x − centre(t)| < 32`. `span(g)` = [centre of g's first tile − 32, centre of its last + 32) for g = the
+  extras or the Condition photos (none when g is empty).
+
+  | source | over a template shot `t` ≠ source | in span(extras) | in span(Condition) | anywhere else (own tile, Free shot, gaps) |
+  |---|---|---|---|---|
+  | a template shot's photo | swap `t` → move `{container, t}` | `main_confirm` | to Condition → classify | null |
+  | an extra | swap `t` | insert `i` → move `{extra_insert, i}`; `i` = 1 + the other extras whose centre < x; `i` = own place → null | to Condition | null |
+  | a Condition photo | swap `t` | to Main → classify | insert `i` → move `{condition_insert, i}` (same rule) | null |
+
+  (Untemplated: no template shots; the extras are the Main list.) Swap is card LV8 (an empty shot is filled);
+  across groups is book 06 ("goes to the end of the target").
+- **PH9.4 Cancels.** In `pressing`, `lifted` or `dragging`, each of these ends the gesture with no request and the tile
+  back home: `pointercancel`; a pointer down with another `pointerId`; `visibilitychange` to hidden; window `blur`;
+  the strip unmounting; a session view whose `arrangementKey` differs from the stored one; release with a null target.
+  `arrangementKey(view)` = the shots' `container_id:photo_id|-` in shooting order, then the extras' ids, then the
+  Condition ids; preview tokens, revisions and the current shot are not in it (a picture arriving never cancels).
+- **PH9.5 While the Mac answers a drop.** The strip shows `applyDrop(base, photo, drop)` (`base` = the view at the drop;
+  swap exchanges, an empty target leaves the source's place empty and a non-template source takes the target's photo
+  into its own place; insert reorders; to Main / to Condition appends to that group) until: (a) the request succeeded
+  and the first session read **started after** its answer returns → that view; (b) the request failed → the last view
+  from the Mac, `refused` (toast by code), a re-read; (c) `pendingMs` (8 s) without an answer → the last view from the
+  Mac and a re-read, no toast. While a drop is pending nothing lifts (a long press is a tap). Swipes are not shown
+  ahead in the strip.
+- **Invariant PH9.** A drag sends at most one request, only on a release with a non-null target computed from homes
+  measured at lift; the strip never shows a pending arrangement after one of PH9.5's ends; the phone never decides a
+  placement: every outcome on screen after an end is the Mac's re-read.
+
 **Invariant PH.** No request without a live pairing reaches a service; no POST acts on a session other than the
 active one; the phone uses only relative URLs and no secure-context API.
 
@@ -540,6 +648,13 @@ active one; the phone uses only relative URLs and no secure-context API.
   a new npm dependency), never fetched from Google at runtime; UI text "Helvetica Neue", Helvetica, Arial.
 - **Split halves** are labelled "Left · 1:1" and "Right · 1:1" (LV-D16; the design's A/B).
 - **Phone Delete** (extras, condition) = Deny (`ReviewService::delete`); **Move** = swap (card LV8), a hand action.
+  **v1.2 (LV-D20 (4)):** the Delete button is gone; the left swipe does the same request.
+- **Phone texts v1.2 (LV8, exact):** the confirmation "Move this photo to Main, outside its template order?" with
+  buttons "Move" and "Cancel" · swipe hints "DENY", "MAIN", "CONDITION", "ALREADY MAIN", "ALREADY CONDITION" · toasts
+  "Image deleted" (left, extra or Condition), "Shot NN reopened" (left, template shot), "Moved to main images" (right),
+  "Sent to condition images" (up) · a successful drop shows no toast; a refused one shows the `refused` text by code
+  ("Session changed on the Mac", "That did not work. Try again."). Haptics (design README §Haptics): lift 12, target
+  change 6, drop and Main/Condition swipes `[30,40,60]` (Move image), Deny `[30,40,30]` (Retake / delete).
 
 ## 7. Tracker
 Each plan file's **Tracker** line is that milestone's row (sessions change only that line). Current: all four
@@ -575,3 +690,6 @@ orchestrator updates it when resuming, it is outside this planning session's wri
 `LV3` needs `LV2`'s routes and wire (frozen in §5 PH, so `LV3`'s tests mock them); `LV4` needs the packaged build of
 `LV3`. Owner card 1 answered 2026-11-26: "Article number" is the item's barcode (the Shopify product barcode Session Manager
 already reads); LV2·C9(b) fills it, LV3·C24(a) hides the row only when an item has no barcode.
+**v1.2 (2026-11-27):** `LV7` (approved) → `LV8_phone_sort_and_arrange` (`depends_on: [LV7_tile_loading_cue]`; it edits
+the same phone files and keeps LV7's waiting tile). Runner: `tools/pipeline/run_phase.sh phase
+LV8_phone_sort_and_arrange`. LV4 is done (STATUS_live); LV8's own try-out is on the hardware by the owner.
