@@ -367,6 +367,24 @@ export function sortSession(change: (session: PhoneSession) => void = () => unde
   });
 }
 
+/**
+ * LV8 fixture D: shots in shooting order B (final 02, photo 201), A (01, photo 204), C (03, empty);
+ * extras 202, 205, 206 (Main 04, 05, 06); condition 203, 207, 208 (C1–C3); current = Free shot. Tile
+ * centres x in the stub's layout: B 44 · A 108 · C 172 · 202 236 · 205 300 · 206 364 · Free 428 ·
+ * 203 511 · 207 575 · 208 639; the strip is y 700–784, tile centres y 742.
+ */
+export function dragSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  const image = (photo_id: number) => ({ photo_id, revision: 1, ratio: 1, preview: 'k0' });
+  return chairSession(session => {
+    session.current = { kind: 'free' };
+    session.shots[1].photo = image(204);
+    session.extras = [image(202), image(205), image(206)];
+    session.condition = [image(203), image(207), image(208)];
+    session.counts = { main: 5, condition: 3 };
+    change(session);
+  });
+}
+
 /** The token the started phone is paired with. */
 export const TOKEN = 'T';
 

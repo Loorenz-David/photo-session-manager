@@ -1070,11 +1070,21 @@ the direct adapter only.
     /focus`), `ratioLabel`. `gestures.ts` — the design's thresholds as pure rules (`touchMode`, `lockProgress`,
     `overlayValue`, `isDoubleTap`), the dock's tap rule (`DOCK`: a touch within 8 px is a tap, the nearest tile within
     32 px; LV6 removed `tileScale` and the hold gestures) and the haptic patterns (`HAPTIC`, `buzz`).
+  - `arrange.ts` (LV8; §5 PH9) — the pure rules of sort and arrange: `swipeAction` (what a Preview swipe does, by
+    subject and direction), `nextPhoto` (the photo shown after a swipe), `dropTarget` (the target under a lifted
+    photo, from the tiles' **homes measured once at lift**, never from where sliding tiles are drawn), `applyDrop`
+    (the arrangement the strips show while the Mac answers a drop), `arrangementKey` (which photo is where; a change
+    cancels a drag, a new preview picture does not). The thresholds are `SWIPE` and `DRAG` in `gestures.ts`.
+    `components/Dock.tsx` is both strips (`dock` on the live screen, `preview-strip` in the Preview) and runs the
+    drag as one state machine (pressing → tap | scrolling | moved | lifted → dragging → drop or cancel) on pointer
+    events with pointer capture; **no HTML5 drag and drop**. Every cancel cause reaches one function. The pending
+    drop lives in `PhoneApp` (it outlives the Preview) and ends exactly three ways: the first session read started
+    after the Mac's answer, a refusal, or 8 s without an answer. The phone never decides a placement.
   - `components/` — `Stage` (the image viewport, its layers and one-finger gestures; `ImageFrame` sizes it from the
     stage and the shot's ratio and is reused by `Preview`), `LiveCanvas` (the JPEG drawn as it arrived with
     `createImageBitmap`; always mounted, shown by opacity only once a frame of the current `gen` is drawn),
     `TemplateLayer` (the example `<img>`, `filter: grayscale(1)`: display only, H3), `LockControl`, `OverlayBar`,
-    `ControlBar`, `Dock`, `Preview`, `MoveDrawer`, `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay`,
+    `ControlBar`, `Dock`, `Preview` (LV8: the swipe's state machine), `ConfirmSheet` (LV8), `MoveDrawer`, `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay`,
     `FullscreenButton`. `phone.css` holds the design tokens as CSS variables; values that change with state are
     inline styles. IBM Plex Mono is bundled (`@fontsource/ibm-plex-mono`, latin 400/500), never fetched at runtime.
   - **The image rule (LV6; §5 PH6a, finding F7).** Every photo preview on the phone is drawn by

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { ApiError, capture, classifyPhoto, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, retake, session, setCurrent, takeToken, Unpaired } from './api';
-import { nextPhoto, type SwipeAction } from './arrange';
+import { applyDrop, type Drop, nextPhoto, type SwipeAction } from './arrange';
 import { ConfirmSheet } from './components/ConfirmSheet';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
 import { ControlBar } from './components/ControlBar';
@@ -282,12 +282,42 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     }
   };
 
-  // LV-D20 (1): a template shot's photo goes to the extra Main photos only after "Move".
-  const [confirming, setConfirming] = useState<number | null>(null);
-  const asksStill = confirming !== null && previewSubject(view, confirming)?.kind === 'shot';
+  // LV-D20 (1): a template shot's photo goes to the extra Main photos only after "Move"; asked
+  // after a right swipe in the Preview, and after a drop among the extras in a strip.
+  const [confirming, setConfirming] = useState<{ photo_id: number; dropped: boolean } | null>(null);
+  const asksStill = confirming !== null && previewSubject(view, confirming.photo_id)?.kind === 'shot';
   useEffect(() => {
     if (confirming !== null && !asksStill) setConfirming(null);
   }, [confirming, asksStill]);
+
+  // PH9.5: while the Mac answers a drop, the strips show where the photo was put.
+  const [pending, setPending] = useState<PhoneSession | null>(null);
+
+  /**
+   * PH9.2–PH9.3: a lifted photo was released on a target. The Mac is asked (a swap or an insert is
+   * a move, the other group is a classify) and the strips show the drop at once; a successful drop
+   * says nothing, a refused one says why.
+   */
+  const drop = async (photoId: number, target: Drop) => {
+    if (!view) return;
+    if (target.kind === 'main_confirm') return setConfirming({ photo_id: photoId, dropped: true });
+    setPending(applyDrop(view, photoId, target));
+    buzz(HAPTIC.move);
+    // A template shot that loses its photo to the other group becomes the current shot (plan point P6).
+    if (target.kind !== 'swap' && target.kind !== 'insert' && previewSubject(view, photoId)?.kind === 'shot') clearFocus();
+    try {
+      if (target.kind === 'swap') await movePhoto(token, photoId, view.id, { kind: 'container', container_id: target.container_id });
+      else if (target.kind === 'insert') await movePhoto(token, photoId, view.id, { kind: target.group === 'extra' ? 'extra_insert' : 'condition_insert', index: target.index });
+      else await classifyPhoto(token, photoId, view.id, target.kind === 'to_condition' ? 'condition' : 'main');
+      setPending(null);
+      void readSession();
+    } catch (error) {
+      setPending(null);
+      refused(error, TEXT.failed);
+    }
+  };
+  /** What the strips show: the drop the Mac is answering, else the Mac's view. */
+  const arranged = pending && view && pending.id === view.id ? pending : view;
 
   /**
    * PH9.1: a counted swipe on the previewed photo. The next photo shows at once (plan point P4),
@@ -360,7 +390,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
         buzz(HAPTIC.clearFocus);
         clearFocus();
       }} />
-    {view && <Dock token={token} view={view} rotated={rotated} enabled={free} onSelect={select} />}
+    {arranged && <Dock token={token} view={arranged} rotated={rotated} enabled={free} onSelect={select} onDrop={(photoId, target) => void drop(photoId, target)} />}
     <ControlBar rotated={rotated} next={next} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} onMenu={() => {
       buzz(HAPTIC.menu);
       dispatch({ type: 'menu', open: true });
@@ -370,9 +400,9 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       backLabel={backLabel(view)} onBack={() => dispatch({ type: 'preview', photo_id: null })} onRetake={() => void retakeShot()} onMove={() => {
         buzz(HAPTIC.menu);
         dispatch({ type: 'move', open: true });
-      }} onSwipe={action => (action === 'main_confirm' ? setConfirming(subject.image.photo_id) : void swipe(action))}
-      strip={<Dock token={token} view={view} rotated={isRotated(previewRatio(state, subject))} enabled={!state.moveOpen && confirming === null} onSelect={selectInPreview}
-        testId="preview-strip" marked={subject.image.photo_id} />} />}
+      }} onSwipe={action => (action === 'main_confirm' ? setConfirming({ photo_id: subject.image.photo_id, dropped: false }) : void swipe(action))}
+      strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.moveOpen && confirming === null}
+        onSelect={selectInPreview} onDrop={(photoId, target) => void drop(photoId, target)} testId="preview-strip" marked={subject.image.photo_id} />} />}
     {view && subject && <MoveDrawer token={token} view={view} subject={subject} open={state.moveOpen} onClose={() => dispatch({ type: 'move', open: false })}
       onPick={tile => void move(tile)} />}
     {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
@@ -382,7 +412,9 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       }} />}
     <ConfirmSheet open={asksStill} text={TEXT.confirmMain} confirmLabel="Move" onCancel={() => setConfirming(null)} onConfirm={() => {
       setConfirming(null);
-      if (subject?.image.photo_id === confirming) void swipe('main');
+      if (!confirming) return;
+      if (confirming.dropped) void drop(confirming.photo_id, { kind: 'to_main' });
+      else if (subject?.image.photo_id === confirming.photo_id) void swipe('main');
     }} />
     {state.propsOpen && <PropertiesPage onBack={() => dispatch({ type: 'props', open: false })} />}
     <ConnectingOverlay connected={isConnected} macName={state.hello?.mac_name ?? null} itemName={view?.item.name ?? null} />

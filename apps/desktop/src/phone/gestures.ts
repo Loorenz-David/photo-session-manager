@@ -66,6 +66,15 @@ export const DOCK = {
  */
 export const SWIPE = { holdMs: 200, startPx: 14, commitPx: 96, hintPx: 24 } as const;
 
+/**
+ * Lift, drag and drop in the strips (book 10J LV-D20 (3); master_plan_live §5 PH9.2–PH9.5). A
+ * photo tile lifts after the finger has rested `liftMs` on it and grows to `liftScale`; a drop
+ * counts within `bandPx` above and below the strip; within `edgePx` of the strip's visible ends it
+ * scrolls `scrollStepPx` every `scrollTickMs`; the strip shows a drop for at most `pendingMs`
+ * without the Mac's answer.
+ */
+export const DRAG = { liftMs: 400, liftScale: 1.15, bandPx: 48, edgePx: 40, scrollStepPx: 8, scrollTickMs: 16, pendingMs: 8000 } as const;
+
 /** Design §Haptics (ms). Only where the browser has them (Android Chrome); iPhone keeps the visual cues. */
 export const HAPTIC = {
   capture: [80, 40, 120],
@@ -80,6 +89,9 @@ export const HAPTIC = {
   hold: 10,
   clearFocus: 10,
   overlayTick: 5,
+  /** LV8: a photo is lifted (the design's "magnify start"); the drop target changed (its "hover tick"). */
+  lift: 12,
+  dragTick: 6,
 } as const;
 
 export function buzz(pattern: number | readonly number[]): void {

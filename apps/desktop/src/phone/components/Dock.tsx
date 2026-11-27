@@ -1,6 +1,7 @@
-import { type PointerEvent as ReactPointerEvent, useLayoutEffect, useRef } from 'react';
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { exampleUrl, type PhoneSession } from '../api';
-import { DOCK } from '../gestures';
+import { type Drop, dropTarget, type Home } from '../arrange';
+import { buzz, DOCK, DRAG, HAPTIC } from '../gestures';
 import { type DockTile, dockTiles, tileImage } from '../state';
 import { PhotoImage } from './PhotoImage';
 
@@ -14,6 +15,8 @@ type Props = {
   enabled: boolean;
   /** A tap chose the tile. */
   onSelect: (tile: DockTile) => void;
+  /** A lifted photo was released on a target (PH9.3): the app asks the Mac. */
+  onDrop: (photoId: number, drop: Drop) => void;
   /** `dock` on the live screen, `preview-strip` in the Preview (LV-D20 (2): the same strip in both). */
   testId?: string;
   /** The Preview's strip outlines the photo shown (plan point P11) instead of the current shot. */
@@ -22,16 +25,68 @@ type Props = {
 
 /** The marked tile is kept this far inside the strip's visible edges. */
 const REVEAL_PX = 16;
+/** The pitch of two tiles when a group has only one to measure it from (56 px tiles, 8 px apart). */
+const PITCH_PX = 64;
+/** How long the strip's "put back" and "set down" looks last (the cancel's spring-back ≤ 200 ms). */
+const BACK_MS = 200;
+const SET_MS = 60;
+
+/** What a lifted photo carries from the moment it is lifted (PH9.2, PH9.3). */
+type Lift = {
+  source: Home;
+  photoId: number;
+  /** Every tile's home, measured once, at lift. */
+  homes: Home[];
+  /** The strip's rectangle at lift: the band and the auto-scroll edges are counted from it. */
+  strip: { left: number; right: number; top: number; bottom: number };
+  /** Where the finger took the tile: x in content coordinates, y on screen. */
+  grab: { x: number; y: number };
+  /** The finger's last place on screen (an auto-scroll step moves the content under it). */
+  finger: { x: number; y: number };
+  target: Drop | null;
+  /** The auto-scroll: its direction and its 16 ms timer while the finger is at an end of the strip. */
+  scrolling: -1 | 0 | 1;
+  scroll: ReturnType<typeof setInterval> | null;
+};
 
 /**
- * The shot dock (design §3 as amended by book 10J LV-D19 (1)): an 84 px strip of 56 px thumbnails.
- * A touch that stays within 8 px is a tap, however long it is held, and selects the nearest tile;
- * one that moves sideways scrolls the strip; one that moves up or down selects nothing. There is
- * no hold gesture. The strip never moves and nothing grows out of it.
+ * One finger on the strip (PH9.2): `pressing` until it is released (a tap), moves sideways
+ * (`scrolling`), moves up or down (`moved`), or rests `DRAG.liftMs` on a photo (`lifted`, then
+ * `dragging`). No state means idle.
  */
-export function Dock({ token, view, rotated, enabled, onSelect, testId = 'dock', marked }: Props) {
+type Press = { phase: 'pressing' | 'scrolling' | 'moved'; pointerId: number; x: number; y: number; scrollLeft: number; timer: ReturnType<typeof setTimeout> | null };
+type Carry = { phase: 'lifted' | 'dragging'; pointerId: number; lift: Lift };
+type Gesture = Press | Carry;
+const carries = (gesture: Gesture): gesture is Carry => 'lift' in gesture;
+
+/** What the strip draws of a drag: the lifted tile's key and offset, and the target under the finger. */
+type Drag = { key: string; dx: number; dy: number; target: Drop | null; away: boolean; pitch: number };
+
+const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
+const same = (a: Drop | null, b: Drop | null) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * The photo strip (design §3 as amended by book 10J LV-D19 (1) and LV-D20 (3)): an 84 px strip of
+ * 56 px thumbnails, on the live screen and in the Preview. A touch that stays within 8 px and is
+ * released before 400 ms is a tap and selects the nearest tile; one that moves sideways scrolls
+ * the strip; one that moves up or down selects nothing. A finger that rests 400 ms on a photo lifts
+ * it: it follows the finger, the tiles of its group slide aside to show where it would go, and a
+ * release on a target asks the Mac (swap between template shots, insert among the extras or the
+ * Condition images, to the other group's end). Targets are computed from the tiles' homes measured
+ * at lift, never from where they are drawn while they slide. No HTML5 drag and drop.
+ */
+export function Dock({ token, view, rotated, enabled, onSelect, onDrop, testId = 'dock', marked }: Props) {
   const tiles = dockTiles(view);
+  // A timer started at the press reads the tiles as they are when it fires.
+  const shown = useRef(tiles);
+  shown.current = tiles;
+  const strip = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const gesture = useRef<Gesture | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  /** After a drag: `back` while the tiles spring home, `set` for the instant a drop is shown. */
+  const [after, setAfter] = useState<'back' | 'set' | null>(null);
+  const afterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const outlined = (tile: DockTile) => (marked === undefined ? tile.current : tileImage(tile)?.photo_id === marked);
 
   // The photo shown is in sight: the strip scrolls just far enough when it changes.
@@ -44,9 +99,8 @@ export function Dock({ token, view, rotated, enabled, onSelect, testId = 'dock',
     const over = rect.right + REVEAL_PX - frame.right;
     const under = frame.left + REVEAL_PX - rect.left;
     const wanted = element.scrollLeft + (over > 0 ? over : under > 0 ? -under : 0);
-    element.scrollLeft = Math.max(0, Math.min(wanted, element.scrollWidth - element.clientWidth));
+    element.scrollLeft = clamp(wanted, 0, Math.max(0, element.scrollWidth - element.clientWidth));
   }, [marked]);
-  const touch = useRef<{ x: number; y: number; scrollLeft: number; scrolling: boolean; moved: boolean } | null>(null);
 
   /** The tile whose centre is nearest the finger, if within half a pitch. */
   const nearest = (clientX: number): DockTile | undefined => {
@@ -60,51 +114,188 @@ export function Dock({ token, view, rotated, enabled, onSelect, testId = 'dock',
         best = element.dataset.dockK;
       }
     }
-    return distance <= DOCK.nearPx ? tiles.find(tile => tile.key === best) : undefined;
+    return distance <= DOCK.nearPx ? shown.current.find(tile => tile.key === best) : undefined;
+  };
+
+  /** The strip looks `look` for `ms`, then as always. */
+  const lookFor = useCallback((look: 'back' | 'set', ms: number) => {
+    if (afterTimer.current) clearTimeout(afterTimer.current);
+    setAfter(look);
+    afterTimer.current = setTimeout(() => setAfter(null), ms);
+  }, []);
+
+  /**
+   * The gesture is over, whatever it was: its timers stop and the strip is idle. A drag that ends
+   * `dropped` is shown where it landed at once; any other end lets the tiles spring home.
+   */
+  const finish = useCallback((dropped: boolean) => {
+    const now = gesture.current;
+    gesture.current = null;
+    if (!now) return;
+    if (!carries(now)) {
+      if (now.timer) clearTimeout(now.timer);
+      return;
+    }
+    if (now.lift.scroll) clearInterval(now.lift.scroll);
+    setDrag(null);
+    lookFor(dropped ? 'set' : 'back', dropped ? SET_MS : BACK_MS);
+  }, [lookFor]);
+
+  useEffect(() => () => {
+    finish(false);
+    if (afterTimer.current) clearTimeout(afterTimer.current);
+  }, [finish]);
+
+  /** PH9.3: the finger is at `(clientX, clientY)`: the target under it, and where the lifted tile is drawn. */
+  const follow = (lift: Lift, clientX: number, clientY: number) => {
+    const element = scroller.current;
+    if (!element) return;
+    lift.finger = { x: clientX, y: clientY };
+    const x = clientX - lift.strip.left + element.scrollLeft;
+    const inBand = clientY >= lift.strip.top - DRAG.bandPx && clientY <= lift.strip.bottom + DRAG.bandPx;
+    const target = dropTarget(lift.homes, lift.source.key, x, inBand);
+    if (target && !same(target, lift.target)) buzz(HAPTIC.dragTick);
+    lift.target = target;
+    const group = lift.homes.filter(home => home.kind === lift.source.kind);
+    setDrag({
+      key: lift.source.key,
+      dx: x - lift.grab.x,
+      dy: clamp(clientY - lift.grab.y, -DRAG.bandPx, DRAG.bandPx),
+      target,
+      away: !inBand,
+      pitch: group.length > 1 ? group[1].centre - group[0].centre : PITCH_PX,
+    });
+  };
+
+  /** PH9.2: at an end of the strip the strip scrolls under the lifted photo; the target follows every step. */
+  const edge = (lift: Lift, clientX: number) => {
+    const direction = clientX <= lift.strip.left + DRAG.edgePx ? -1 : clientX >= lift.strip.right - DRAG.edgePx ? 1 : 0;
+    if (direction === lift.scrolling) return;
+    if (lift.scroll) clearInterval(lift.scroll);
+    lift.scrolling = direction;
+    lift.scroll = direction === 0 ? null : setInterval(() => {
+      const element = scroller.current;
+      if (!element) return;
+      element.scrollLeft = clamp(element.scrollLeft + direction * DRAG.scrollStepPx, 0, Math.max(0, element.scrollWidth - element.clientWidth));
+      follow(lift, lift.finger.x, lift.finger.y);
+    }, DRAG.scrollTickMs);
+  };
+
+  /** PH9.2: the finger rested on a photo: it is lifted, and every tile's home is measured now. */
+  const liftAt = (pointerId: number, clientX: number, clientY: number) => {
+    const element = scroller.current;
+    const box = strip.current?.getBoundingClientRect();
+    const tile = nearest(clientX);
+    const image = tile && tileImage(tile);
+    if (!element || !box || !tile || !image) return;
+    const homes = Array.from(element.querySelectorAll<HTMLElement>('[data-dock-k]')).flatMap((node): Home[] => {
+      const of = shown.current.find(candidate => candidate.key === node.dataset.dockK);
+      if (!of) return [];
+      const rect = node.getBoundingClientRect();
+      return [{ key: of.key, kind: of.kind, centre: rect.left - box.left + element.scrollLeft + rect.width / 2, container_id: of.kind === 'shot' ? of.shot.container_id : null }];
+    });
+    const source = homes.find(home => home.key === tile.key);
+    if (!source) return;
+    const lift: Lift = {
+      source, photoId: image.photo_id, homes, strip: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
+      grab: { x: clientX - box.left + element.scrollLeft, y: clientY }, finger: { x: clientX, y: clientY }, target: null, scrolling: 0, scroll: null,
+    };
+    gesture.current = { phase: 'lifted', pointerId, lift };
+    buzz(HAPTIC.lift);
+    follow(lift, clientX, clientY);
   };
 
   const down = (event: Pointer) => {
-    if (!enabled || !scroller.current) return;
+    if (!enabled || !scroller.current || gesture.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    touch.current = { x: event.clientX, y: event.clientY, scrollLeft: scroller.current.scrollLeft, scrolling: false, moved: false };
+    const { pointerId, clientX, clientY } = event;
+    const now: Press = { phase: 'pressing', pointerId, x: clientX, y: clientY, scrollLeft: scroller.current.scrollLeft, timer: null };
+    // A tile without a photo never lifts: its long press is still a tap.
+    now.timer = setTimeout(() => {
+      if (gesture.current === now && now.phase === 'pressing') liftAt(pointerId, clientX, clientY);
+    }, DRAG.liftMs);
+    gesture.current = now;
   };
 
-  /** Notes how far the touch has gone; sideways past the tap distance it scrolls from then on. */
-  const track = (event: Pointer) => {
-    const now = touch.current;
+  const move = (event: Pointer) => {
+    const now = gesture.current;
     const element = scroller.current;
-    if (!now || !element) return;
+    if (!now || !element || now.pointerId !== event.pointerId) return;
+    if (carries(now)) {
+      now.phase = 'dragging';
+      follow(now.lift, event.clientX, event.clientY);
+      edge(now.lift, event.clientX);
+      return;
+    }
+    // Before a lift (LV6): sideways past the tap distance scrolls from then on; up or down is no tap.
     const dx = event.clientX - now.x;
-    if (Math.abs(dx) > DOCK.tapPx) now.scrolling = true;
-    if (now.scrolling || Math.abs(event.clientY - now.y) > DOCK.tapPx) now.moved = true;
-    if (now.scrolling) element.scrollLeft = now.scrollLeft - dx;
+    if (Math.abs(dx) > DOCK.tapPx) now.phase = 'scrolling';
+    else if (now.phase === 'pressing' && Math.abs(event.clientY - now.y) > DOCK.tapPx) now.phase = 'moved';
+    if (now.phase !== 'pressing' && now.timer) {
+      clearTimeout(now.timer);
+      now.timer = null;
+    }
+    if (now.phase === 'scrolling') element.scrollLeft = now.scrollLeft - dx;
   };
 
   const up = (event: Pointer) => {
-    track(event);
-    const now = touch.current;
-    touch.current = null;
-    if (!now || now.moved) return;
-    const tile = nearest(event.clientX);
+    const now = gesture.current;
+    if (!now || now.pointerId !== event.pointerId) return;
+    move(event);
+    if (carries(now)) {
+      const { target, photoId } = now.lift;
+      // The confirmation decides a template shot's photo: until then nothing moved.
+      finish(target !== null && target.kind !== 'main_confirm');
+      if (target) onDrop(photoId, target);
+      return;
+    }
+    const tap = now.phase === 'pressing';
+    finish(false);
+    const tile = tap ? nearest(event.clientX) : undefined;
     if (tile) onSelect(tile);
   };
 
-  const cancel = () => {
-    touch.current = null;
+  const cancel = (event: Pointer) => {
+    if (gesture.current?.pointerId === event.pointerId) finish(false);
   };
 
+  /** How far a tile of the lifted photo's group stands aside for it (px), while it would be inserted. */
+  const aside = (tile: DockTile): number => {
+    if (!drag || drag.target?.kind !== 'insert' || tile.kind !== drag.target.group || tile.key === drag.key) return 0;
+    const group = tiles.filter(candidate => candidate.kind === tile.kind).map(candidate => candidate.key);
+    const own = group.indexOf(drag.key) + 1;
+    const place = group.indexOf(tile.key) + 1;
+    if (own === 0) return 0;
+    const among = place < own ? place : place - 1;
+    return ((among < drag.target.index ? among : among + 1) - place) * drag.pitch;
+  };
+  /** The mark of a tile the lifted photo would land on, or join. */
+  const dropMark = (tile: DockTile): 'swap' | 'group' | undefined => {
+    const target = drag?.target;
+    if (!target) return undefined;
+    if (target.kind === 'swap') return tile.kind === 'shot' && tile.shot.container_id === target.container_id ? 'swap' : undefined;
+    if (target.kind === 'to_condition') return tile.kind === 'condition' ? 'group' : undefined;
+    if (target.kind === 'to_main' || target.kind === 'main_confirm') return tile.kind === 'extra' ? 'group' : undefined;
+    return undefined;
+  };
+
+  const turn = `rotate(${rotated ? 90 : 0}deg)`;
   const firstCondition = tiles.findIndex(tile => tile.kind === 'condition');
-  return <div className="ph-dock-strip" data-testid={testId} onPointerDown={down} onPointerMove={track} onPointerUp={up} onPointerCancel={cancel}
-    onContextMenu={event => event.preventDefault()}>
+  return <div className="ph-dock-strip" ref={strip} data-testid={testId} data-drag={drag ? 'on' : after ?? undefined}
+    onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onContextMenu={event => event.preventDefault()}>
     <div className="ph-dock-scroller" ref={scroller}>
       <div className="ph-dock-row">
         {tiles.map((tile, index) => {
           const image = tileImage(tile);
+          const lifted = drag?.key === tile.key;
+          const slid = aside(tile);
+          const transform = lifted ? `translate(${drag.dx}px, ${drag.dy}px) ${turn} scale(${DRAG.liftScale})` : slid !== 0 ? `translateX(${slid}px) ${turn}` : turn;
           return [
             index === firstCondition && <div key="divider" className="ph-dock-divider" data-testid="dock-divider" />,
             <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={outlined(tile) || undefined}
+              data-lifted={lifted || undefined} data-away={(lifted && drag.away) || undefined} data-drop={dropMark(tile)}
               className={`ph-dock-tile${tile.kind === 'free' ? ' ph-dock-free' : ''}`}
-              style={{ transform: `rotate(${rotated ? 90 : 0}deg)`, outline: `2px solid ${outlined(tile) ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
+              style={{ transform, outline: `2px solid ${outlined(tile) ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
               {image && <PhotoImage token={token} image={image} className="ph-dock-image" />}
               {!image && tile.kind === 'shot' && tile.shot.example
                 && <img className="ph-dock-image ph-grey" alt="" draggable={false} src={exampleUrl(token, tile.shot.container_id)} />}

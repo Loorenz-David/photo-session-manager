@@ -260,15 +260,32 @@ label printed itself. Same key and store as conversations; labels need the scope
     shows where the photo landed. The phone never moves the current shot itself: it shows what the Mac says.
   - **Shot dock.** Template shots in shooting order with their final numbers, extra Main images, the **Free shot** tile
     (in a templated session its captures are Condition, card LV7), then Condition images (C1…). 56 px tiles that
-    **scroll sideways**; a **single tap** (however long the finger rests) selects an empty shot or opens an image's
-    preview; there is no hold gesture on the dock (LV6, book 10J LV-D19: no magnifier, no drag-up). A photo whose
+    **scroll sideways**; a **tap** selects an empty shot or opens an image's preview (LV6, book 10J LV-D19: no
+    magnifier, no drag-up). **Press and hold a photo (0.4 s) to lift it** (LV8, book 10J LV-D20 (3)): it grows and
+    follows the finger; dropped **on a template shot** it swaps with that shot's photo (an empty shot is filled, card
+    LV8); dragged **along its own group** (extra Main photos, or Condition images) the others slide aside and it is
+    inserted there; dropped **into the other group** it goes to that group's end (a template shot's photo dropped
+    among the extras asks first, as the right swipe does). Held at an end of the strip, the strip scrolls. A second
+    finger, the phone taking the touch away, leaving the app, the Mac changing the photos meanwhile, or letting go
+    more than 48 px above or below the strip puts the photo back and asks nothing. **The drop shows at once**; if
+    the Mac refuses, the strip goes back and the phone says why; after 8 s without an answer it goes back and asks the
+    Mac again. An empty shot and the Free shot tile never lift (their long press is a tap). A photo whose
     preview the Mac has not made yet shows a plain grey tile with its number; the picture appears by itself, never
     a broken image. **Next** jumps to the next empty shot in shooting
     order, then to Free shot. In Free shot live is always on (there is no template to show).
   - **Preview.** A captured image with Back, **Retake** (template shots: the photo is denied at once, undoable on the
-    Mac, and the shot is current again) or **Delete** (extras, condition = Deny), and **Move image**: any Main
-    position, a new extra, or the Condition group; a position that has an image swaps (card LV8; the Mac's drop
-    still replaces).
+    Mac, and the shot is current again) and **Move image**: any Main position, a new extra, or the Condition group; a
+    position that has an image swaps (card LV8; the Mac's drop still replaces). **Swipe to sort** (LV8, book 10J
+    LV-D20 (1)): **left = Deny** (a template shot's photo as Retake does; ⌘Z on the Mac brings it back), **right =
+    Main** (a Condition image goes to the end of Main; a template shot's photo first asks "Move this photo to Main,
+    outside its template order?" with Move / Cancel, and its shot is then empty and current), **up = Condition** (a
+    template shot it filled is empty and current). A swipe counts from 96 px; the next photo shows at once (after the
+    last one the Preview closes); a photo already in that group springs back ("ALREADY MAIN" / "ALREADY CONDITION");
+    downwards does nothing. On a template shot's photo a still hold of 0.2 s shows its template instead (sideways
+    then sets the overlay). There is **no Delete button** (the left swipe denies). The Preview shows **the same photo
+    strip** as the live screen between the picture and the buttons, marking the photo shown: a tap shows another
+    photo, a tap on an empty shot or the Free shot makes it current and closes the Preview, and photos are lifted and
+    dragged there as on the live screen.
   - **Item drawer** (menu button): item name, SKU, article number (the barcode, only when the item has one), current
     shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17).
   - Haptics on Android only (iPhone browsers have none). No wake lock: the screen follows the phone's Auto-Lock; when

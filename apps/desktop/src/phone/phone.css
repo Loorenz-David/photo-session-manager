@@ -597,6 +597,67 @@ body,
   background: var(--ph-fill);
   transition: transform 0.3s ease;
 }
+/*
+ * LV-D20 (3): a lifted photo. While one is lifted (`on`) or springing home (`back`) the scroller
+ * reaches 48 px above and below the strip, so the photo can follow the finger through the whole
+ * drop band without being cut; the row stays where it was. Idle, nothing is taller than the strip.
+ */
+.ph-dock-strip[data-drag='on'] .ph-dock-scroller,
+.ph-dock-strip[data-drag='back'] .ph-dock-scroller {
+  bottom: -48px;
+  height: 180px;
+  box-sizing: border-box;
+  padding-bottom: 48px;
+}
+.ph-dock-strip[data-drag='on'],
+.ph-dock-strip[data-drag='back'] {
+  z-index: 31;
+}
+/* The tiles of the lifted photo's group slide aside in 150 ms; a cancelled drag springs home in under 200 ms. */
+.ph-dock-strip[data-drag='on'] .ph-dock-tile {
+  transition: transform 0.15s ease;
+}
+.ph-dock-strip[data-drag='back'] .ph-dock-tile {
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* A drop is shown where it landed at once: nothing animates from where the tiles were drawn. */
+.ph-dock-strip[data-drag='set'] .ph-dock-tile {
+  transition: none;
+}
+.ph-dock-strip .ph-dock-tile[data-lifted] {
+  z-index: 5;
+  transition: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  animation: ph-dock-lift 0.15s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+/* Grows as it is lifted (on top of the transform's own 1.15, which is there from the first frame). */
+@keyframes ph-dock-lift {
+  from { scale: 0.87; box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+  to { scale: 1; }
+}
+/* Too far above or below the strip: letting go here puts it back. */
+.ph-dock-tile[data-away] {
+  opacity: 0.55;
+}
+/* Where the lifted photo would land: on this shot (swap or fill), or at the end of this group. */
+.ph-dock-tile[data-drop]::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 16px;
+  pointer-events: none;
+}
+.ph-dock-tile[data-drop='swap']::after {
+  border: 2.5px solid var(--ph-ink);
+}
+.ph-dock-tile[data-drop='group']::after {
+  border: 1.5px dashed var(--ph-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-dock-strip .ph-dock-tile[data-lifted] {
+    animation: none;
+  }
+}
 .ph-dock-tile .ph-tag {
   left: 4px;
   bottom: 4px;
