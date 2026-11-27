@@ -179,7 +179,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- Chain `run_phase.sh phase LV9_preview_corrections && run_phase.sh phase LV10_zoom_reframe_guides` (Fable), started 2026-11-27 evening.
+- None. LV9 and LV10 APPROVED (APPROVED_WITH_NOTES) 2026-11-27 22:26. Next: rebuild SDK sidecar, build bundle, install (keep LV7-LV8 build in the Desktop old folder), update PR #33, tell the owner. Stopped here on a usage limit.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
