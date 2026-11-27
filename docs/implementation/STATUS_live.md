@@ -136,7 +136,17 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     `sent_10s` 216–250, skipped 0–33 around captures; request → exposed 0.44–0.47 s; each capture one photo via
     Save-to-PC ~1.4 s after exposure, bound to the current shot (11, 9, 12 …); the same file also arrived by Auto FTP
     over Wi-Fi ~5 s later and was filed `outcome=duplicate` (no second photo). Owner: "seems fast"; retake onto a taken
-    shot works. PASS (delay photo pending).
+    shot works. PASS. Glass→iPhone over USB (4 photos, two during captures): 150, 107, 143, 132 ms → **≈ 110–150 ms**.
+  - **R1 withdrawn** (owner: the readout shows on live, "well positioned … we can leave it").
+  - C19 (M-LV5): owner "same as always" (file format, exposure mode M, Focus Area); helper log over both days shows only
+    `sdk.store_destination.set` (×4) and the focus point written. PASS.
+  - C20 clean stop: quit during live → phone live froze, phone actions refused while the Mac was gone; reopened →
+    first USB connect `connect failed` once (13:31:02), connected 7 s later on its own, live back (13:31:09). PASS
+    (camera needs a few seconds after a clean disconnect, as Experiment 10). Unplug during live: Wi-Fi live back in
+    10 s (13:32:28→38); re-plug → USB only after ~40 s, needing a click on Capture One's window (known Capture One
+    hand-back limitation, owner aware). PASS with that limitation.
+  - C5 edge of Wi-Fi: lag at the far end, Wi-Fi off froze live, back on while walking → live resumed by itself (no
+    template fallback). PASS.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
