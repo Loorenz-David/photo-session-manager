@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # LV4 — Hardware check (book 10J M-LV1…M-LV6; owner-attended)
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** DONE (2026-11-27, owner + orchestrator) — 20/20 rows pass (C10, C18 after the LV5 fixes); M-LV6 targets set.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file.)
 
@@ -108,3 +108,9 @@ the owner's M-LV6 targets.
   card when the fix is a product choice.
 
 ## Review log
+- 2026-11-26/27, orchestrator with the owner: run 1 on the LV1–LV3 build found F1–F5, F7 and the owner's LV-D19
+  (dock, reinstall, lock swipe) → LV5, LV6 (approved), installed; run 2 on `3c403e05` completed the rows. All 20 PASS;
+  record in `docs/intention/evidence/live_preview_lab.md` §Hardware check (LV4) and `sony_camera_lab.md` §Live view in
+  the app. **M-LV6 targets (owner): USB ≥ 23 fps, ≤ 0.20 s glass → phone; Wi-Fi ≥ 15 fps (upload dips allowed),
+  ≤ 0.25 s.** Open owner request R2 (a quiet loading cue on a tile whose picture is arriving) → LV7. Notes: Capture One
+  hand-back needs a window click after a USB re-plug (known); phone actions are refused while the Mac app is closed.

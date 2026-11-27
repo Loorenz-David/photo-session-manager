@@ -265,3 +265,13 @@ to `crlab liveview --commands` as `focusaf X Y`.
 | Clean stop | A `quit` command / SIGINT / SIGTERM that disconnects avoids the half-open USB session seen on 2026-11-25 after an abrupt stop. After a clean disconnect the camera took ~18 s to be discoverable again over USB. |
 
 Not covered: Wi-Fi; a capture right after a click (photo sharp where clicked); Manual focus; other Focus Area modes.
+
+## Live view in the app (LV4, 2026-11-26/27, packaged Session Manager, a7R V) [TEST-HW]
+Camera side of the 10J hardware check (rows in `live_preview_lab.md` §Hardware check). USB: 23–25 fps; Wi-Fi 17–21
+fps, ~15 fps during a RAW Auto-FTP upload. Capture from the app with half-press: Wi-Fi 0.50–0.73 s, USB 0.44–0.47 s
+request → exposed; every release exposed. Focus from a phone over Wi-Fi 20/20 focused, 0.39–0.97 s; photos sharp where
+tapped; × recentres via `AF_Area_Position` (320, 240) without AF. With Focus Area **Wide** the point write succeeds but
+no focus frame confirms it (`point_ms=-1`), so the app now reads the Focus Area value and refuses non-Flexible-Spot areas
+(LV5). Only `store_destination` and `AF_Area_Position` were ever written. After a clean quit the first USB connect can
+fail once and succeed seconds later. With USB and Auto FTP both active, each photo arrives twice (Save to PC ~1.4 s,
+FTP ~5 s); the second is filed as a duplicate.
