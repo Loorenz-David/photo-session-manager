@@ -486,3 +486,9 @@ M-LV6 targets set): swipe left/right/up in the phone's Preview = Deny / Main / C
 before leaving its shot for Main); the Preview gets the live screen's photo row; press-hold-lift drag and drop in both
 rows (swap between template shots, insert-and-shift among other Main and among Condition photos). Built from the
 description; the owner judges comfort in use.
+
+D21. **2026-11-27 — Owner: try-out corrections to LV8 and the next phone tools (10J LV-D21).** Loading cue in every
+strip; no flicker when tiles move; a lifted template-shot photo leaves its template picture; the Preview without
+header or button row (⋯ drawer with info and Retake, close icon); pinch to zoom in the Preview; reframe on the phone
+(10D MC-27 composition, two-finger gestures, straightening grid, composition guides); composition guides on the live
+view from the ⋯ menu. Built from the description.
