@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV9 — Preview corrections (book 10J LV-D21 (1)–(4))
 
-**Tracker:** NOT_STARTED (2026-11-27, planner)
+**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units, checkpoints `75c1b755`, `59cefe03`, `7ad59d7f`, `7b9d7df1`; 44 rows → 53 tests (8 Rust `lv9_phone_incoming::`, 45 phone UI in `lv9_{core,incoming,one_step,preview}`); closing gate on clean `7b9d7df1`: `cargo test --workspace` 2782 passed / 0 failed, clippy, fmt, sidecar stub, typecheck green, `npm test` 158 files / 1172 passed / 0 failed; nothing seen on a phone or in a browser (handoff `handoff_LV9_preview_corrections_implement_r1.md`).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -454,3 +454,62 @@ this branch), a templated session open:
 6. On the Mac, check each change in the session view (⌘Z brings back a denied photo).
 
 ## Review log
+
+### 2026-11-27 — implement r1 (fable)
+**Built.** U1: `phone_view` reads CS4a's "on the way" set once (`current_shot::shot_plan`; new `ShotPlan::held_free`) and
+answers `PhoneShot.incoming` and `PhoneSession.incoming {extras, condition}`; no route, event or schema change. U2: the
+phone's types, `dockTiles`' waiting tiles (`w<group><n>`, `isWaiting`), the waiting look of a shot, no tap / lift / home /
+target for waiting tiles, `data-gave-up` and its CSS rule, the stronger cue. U3: tiles keyed by photo in one flat keyed
+list, `previewUrl` and `PhotoImage`'s key without the revision, `applyDrop` kind `remove`, the pending chain in `PhoneApp`
+(`Chain`, `ask` / `answered` / `refusedAhead`; drops and swipes; PH9.5a's four ends), the lift home, `stripFrames`. U4:
+`Preview` reduced to the photo, the strip, ⋯ and ×; new `PhotoDrawer`; `MoveDrawer`, `moveTiles`, `MoveTile`, `backLabel`,
+the `move` action and their CSS removed. Guide: 01, 02, 04.
+
+**Tests.** 44 rows → 53 tests, one or two per row at the row's boundary (map in the handoff). Red baseline: U3 21 of 23
+failed before the change (green before: the U2 core case and C10(c), an "extra leaves a gap" row that was already
+true); U4 11 of 11 failed before. **U1 and U2 have no red baseline** (their tests were written after the code).
+
+**Judgment calls (each also under Assumptions in the handoff).**
+1. `incoming.condition` counts only shutters on the way that are bound to no container (a binding to a container no
+   longer in the template counts as none, CS3). A shutter bound to a container that already holds a photo is not
+   counted and shows nothing; an unbound shutter in a templated session is not counted (CS6 binds it at arrival).
+2. **The cue's grey.** White is only about 6 % lighter than `--ph-fill` (#f1f1ef), so a peak "8–12 % above `--ph-fill`"
+   cannot be drawn on that grey. The placeholder's fill is now the chip border's grey (`--ph-chip-border`, #e2e2e0) and
+   the band is white at 80 %: the peak is about 10 % lighter than the grey it crosses. Every placeholder is that
+   slightly darker grey (dock tiles, the Preview's "Preparing preview…").
+3. A waiting shot is left out of the homes, so it is no swap target either (P2: "cannot be … dropped onto").
+4. The lift home is a sibling at the end of the row, placed at the tile's `offsetLeft` / `offsetTop` measured at lift;
+   it goes the moment the gesture ends, so during a cancel's spring-back (≤ 200 ms) the place is a gap.
+5. A swipe's request is still chosen from the Mac's view of the photo (plan note); only the arrangement and the next
+   photo come from what the strips show. A swipe on a photo an unanswered earlier change has already moved can
+   therefore be refused by the Mac (strips go back, toast).
+6. Retake from the drawer keeps LV3's order (the Mac is asked, then toast and close); it is not shown ahead.
+7. The drawer shows ACTIONS only when it has one (a template shot's photo); the bar sits under the strip with the
+   design's 52 px round buttons; ⋯ buzzes 12 (menu open); the swipe hint ("DENY" …) stays as gesture feedback.
+8. The Preview's picture also takes no touch while the confirmation sheet is open (before: only its strip).
+
+**Deviations.**
+1. `lv7_c2a` (not in the plan's list): its "moving" filter counted any `animation:` declaration, so the new
+   `.ph-photo-wait[data-gave-up]::before { animation: none }` rule the plan's C6(a) requires made it red; the filter now
+   skips `animation: none`. The row is unchanged.
+2. `lv3_main.test.tsx`: one hand-built shot literal gained `incoming: false` (the type requires it).
+3. `lv6_c5b` (the Move drawer's placeholder tile, `lv6_images.test.tsx`) removed with the Move drawer; not in the plan's
+   list. The `kicker` helpers of `lv6_dock`, `lv8_drag`, `lv8_drag_reliability` and the last line of `lv7_c3a` read the
+   Preview's `aria-label` (the plan names `lv3_preview`, `lv8_swipe`, `lv3_drawers`).
+4. `lv8_c15d` is unchanged and still green: PH9.5a (c) keeps its outcome (no answer for 8 s → the Mac's view, a
+   re-read, no toast). What is superseded is LV8's timer that kept running after an answer (C9(b)).
+5. `lv9_core.test.ts` was created in U2 (its `arrangementKey` case belongs there); the plan lists the file under U3.
+6. `docs/guide/02_architecture.md` was also edited in U4 (it listed `MoveDrawer` and `moveTiles`).
+7. Actor `fable`, not the prompt's `codex`.
+
+**For the reviewer.**
+- Row C8(b) as written (Preview of 207, the last photo) closes the Preview, so only the live strip exists to read;
+  `lv9_c8b_in_the_previews_strip_too` shows the same from 203, where the Preview stays open.
+- C5(c) is true by PH9.3's span alone (the waiting tile is past the last Condition tile); what keeps a waiting tile
+  out of insert places is the homes filter in `Dock.liftAt`, read rather than discriminated by that row.
+- A photo arriving in a waiting shot gets a new tile element (its key goes from `s<container>` to `p<photo>`), so
+  the sweep starts over once at that moment. Not asked by a row; keeping one element would contradict F1's keys.
+- `nextStep` (the Next button) still treats a shot whose photo is on its way as empty; choosing it is refused by the
+  Mac (`shot_filled`) as before LV9. Outside this plan's rows; candidate for the backlog.
+- Nothing was seen on a phone or in a browser: the cue's strength, the lift home's place, the bar and the drawer are
+  CSS written by reasoning; jsdom proves structure and requests only.
