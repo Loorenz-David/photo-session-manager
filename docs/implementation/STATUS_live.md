@@ -160,6 +160,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     of the group (book 06), onto a template shot = swap; template photo to Main empties the shot and makes it current;
     lift after 0.4 s still; swipe ≥ 96 px; optimistic drop with rollback, 8 s timeout. Owner: shimmer installs with LV8.
     **LV8 started.**
+  - **LV8 APPROVED** (15:51, review r1, no fix; Fable 15:08–15:46, 4 unit checkpoints). SDK sidecar rebuilt (the gate
+    had put the stub back), release bundle with LV7 + LV8 **installed** (previous kept as "2026-11-26 live fixes
+    LV5-LV6"). Pull request #33 carries everything; waiting for the owner's try-out.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -168,7 +171,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV8_phone_sort_and_arrange` (Fable), started 2026-11-27.
+None. Owner trying LV8 on the phone.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
