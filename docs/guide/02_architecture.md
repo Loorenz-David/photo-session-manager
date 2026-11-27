@@ -1136,6 +1136,20 @@ the direct adapter only.
     The same placeholder is the waiting look of a photo on its way (LV9·U2: `state.ts::isWaiting`, the shot's
     `incoming` and the group tiles of `incoming {extras, condition}`): such a tile is outside taps, lifts, homes,
     drop targets and `arrangementKey`.
+  - **Two fingers and the composition on the phone (LV10; master_plan_live §5 PH11, PH12).** `pinch.ts` is the one
+    two-finger module: `track` (the finger tracker `idle → one → two`; a third finger is ignored, a cancel ends
+    everything, a lifted finger leaves the other going on from where it is), `twoFinger` (scale, signed rotation,
+    start and current midpoints), and the Preview's zoom maths (`pinchView`, `clampPan`, `settleZoom`; `ZOOM` in
+    `gestures.ts`). `components/Preview.tsx` keeps one `Gesture` per touch sequence (the viewport's rectangle is
+    measured once, at the first finger; the zoom layer `.ph-zoom` inside it is never measured) and adds `panning`
+    and `waiting` to PH9.1's one-finger phases. `PhotoImage` draws an image that has a `composition` with the Mac's
+    `composedLayout` (`.ph-composed*` in `phone.css`), and `state.ts::previewRatio` takes the Preview's shape from it.
+    **The reframe editor** (`components/ReframeEditor.tsx`, opened from the photo drawer, state in `PhoneApp`'s
+    `reframing`) reuses the Mac's pure composition modules — `features/compose/{geometry, refit, overlays, composed}.ts`
+    and the constants of `useComposePrefs.ts` — and copies none of them; `reframe.ts` adds only the bounded moves
+    (`panWithin`, `zoomWithin`, `rotateWithin`, `straightenFromTwist`, `resetValues`), each stopping where the Mac's own
+    `validate` would refuse, on every move. Its values live in the editor until Done. Nothing in `src/phone` imports
+    `@/services/bindings` or `@tauri-apps/*` (type-only imports of `@/services/compositions` are fine).
   - Capture feedback: flash and haptic at the tap; the toast waits for the socket's `capture exposed` for that
     capture id and then for the session re-read that shows a new photo (its place decides the text).
   - Tests: `src/phone/__tests__/lv3_*.test.ts(x)` and `lv6_*.test.tsx` render `PhoneApp` against `helpers.ts`'s fake Mac (a `fetch` and a

@@ -309,6 +309,19 @@ label printed itself. Same key and store as conversations; labels need the scope
     straightened, cut to its frame; a split shows its middle line) and the Preview's picture has the framing's
     shape. Before that (the camera's own preview only) the picture shows as it is. Display only: the phone places
     the Mac's preview with CSS, no image is processed (H3).
+  - **Reframe on the phone** (LV10, book 10J LV-D21 (6), 10D MC-27): **⋯ → Reframe** in the Preview opens the
+    Mac's composition as an editor over the photo (while the Mac has no full-frame preview of it yet, Reframe is off
+    and says "Waiting for Capture One's full-frame preview"). The frame stays centred and the photo moves under it:
+    **one finger moves it; two fingers move it, zoom it (spread = closer) and straighten it** (a twist counts after
+    3°, then follows the fingers in 0.1° steps, −45° to 45°). **The frame never shows empty corners**: the photo
+    stops where the frame would leave it, while moving, never by springing back; straightening shrinks the frame
+    about its centre just enough, as the Mac does. A **fine grid** (the Mac's 24 px squares) shows only while two
+    fingers straighten or the straighten slider is held. Controls: **Normal | Split**, **Shape** (Original, 1:1, 4:5,
+    3:2, 2:3, 16:9, Free) with **Turn** beside it, **Rotate and flip** (Rotate 90° left, Rotate 90° right, Flip
+    horizontal; the menu closes after a pick), **Guides** inside the frame (Off, Thirds, Grid, Golden ratio,
+    Diagonals; remembered on the phone, Thirds the first time) and **Reset** (the Mac's default framing: the default
+    shape, centred, as large as fits). No trimming handles on the phone: a Free shape keeps its proportions (trim it
+    on the Mac). The editor stays upright even for a long shot. **Cancel** closes it and nothing reaches the Mac.
   - **Nothing blinks when photos move** (LV9, book 10J LV-D21 (2), (3)): a drop **and a swipe** show in both strips at
     once; several quick ones stack and the strips keep showing them all until the Mac has answered every one (a
     refusal, or 8 s without an answer, puts the strips back to the Mac's view). A moved photo keeps its picture (it

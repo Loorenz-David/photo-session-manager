@@ -1072,6 +1072,224 @@ body,
   gap: 10px;
 }
 
+/* 7. Reframe (LV-D21 (6)): the Mac's composition on the phone. Full screen over the Preview; the frame stays
+   centred in the stage and the photo moves under it. Everything outside the frame is dimmed with the page's white,
+   so the framed part reads as the result. */
+.ph-reframe {
+  position: absolute;
+  inset: 0;
+  z-index: 39;
+  display: flex;
+  flex-direction: column;
+  background: var(--ph-white);
+  animation: ph-preview-in 0.2s ease;
+}
+.ph-reframe-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+.ph-reframe-text {
+  min-width: 76px;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 16px;
+  font-weight: 500;
+}
+.ph-reframe-done {
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+.ph-reframe-done:disabled {
+  opacity: 0.35;
+}
+.ph-reframe-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--ph-fill);
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+/* The whole turned frame, placed by the Mac's view maths (inline transform, about its centre). */
+.ph-reframe-picture {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  will-change: transform;
+  container-type: size;
+  pointer-events: none;
+}
+.ph-reframe-picture img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.ph-reframe-picture img[data-swapped] {
+  width: 100cqh;
+  height: 100cqw;
+}
+.ph-reframe-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ph-white);
+  outline: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 100vmax rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+/* Guide lines over a picture (the editor's frame, the live view): light with a dark edge, readable on any photo. */
+.ph-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.ph-guides line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 0.5px rgba(0, 0, 0, 0.7));
+  vector-effect: non-scaling-stroke;
+}
+/* The fine grid while straightening (the Mac's 24 px squares; the size is inline). */
+.ph-reframe-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+.ph-reframe-tools {
+  flex: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.ph-reframe-straighten {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ph-reframe-straighten input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  accent-color: var(--ph-ink);
+  touch-action: pan-y;
+}
+.ph-reframe-straighten output {
+  flex: none;
+  width: 52px;
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ph-reframe-row {
+  display: flex;
+  gap: 8px;
+}
+.ph-reframe-kind {
+  flex: 1.6;
+  display: flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--ph-fill);
+}
+.ph-reframe-kind button {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ph-secondary);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  font-weight: 500;
+}
+.ph-reframe-kind button[aria-pressed='true'] {
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.ph-reframe-tool {
+  flex: 1;
+  height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 12px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-reframe-tool[aria-expanded='true'] {
+  border-color: var(--ph-ink);
+}
+/* A tool's choices, in a small sheet over the stage's lower edge; it closes after a pick. */
+.ph-reframe-menu {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--ph-white);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.ph-reframe-item {
+  flex: 1 1 auto;
+  height: 42px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.ph-reframe-item[aria-current='true'] {
+  border-color: var(--ph-ink);
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+/* The photo drawer's Reframe while the Mac has no full-frame preview yet. */
+.ph-button:disabled {
+  opacity: 0.35;
+}
+.ph-action-why {
+  font-size: 13px;
+  color: var(--ph-secondary);
+  text-align: center;
+}
+
 /* Item properties (LV-D17: an empty page for now) */
 .ph-page {
   position: absolute;

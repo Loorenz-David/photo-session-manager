@@ -11,6 +11,7 @@ import type { LiveCanvasHandle } from './components/LiveCanvas';
 import { PhotoDrawer } from './components/PhotoDrawer';
 import { Preview } from './components/Preview';
 import { PropertiesPage } from './components/PropertiesPage';
+import { ReframeEditor } from './components/ReframeEditor';
 import { Stage } from './components/Stage';
 import { Toast } from './components/Toast';
 import { isRotated, type Point } from './geometry';
@@ -324,6 +325,14 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     if (confirming !== null && !asksStill) setConfirming(null);
   }, [confirming, asksStill]);
 
+  // LV-D21 (6): the reframe editor, over the Preview of the photo it was opened for. It closes with
+  // nothing sent when that photo leaves the session or the Mac no longer has its full-frame preview.
+  const [reframing, setReframing] = useState<number | null>(null);
+  const reframed = reframing !== null && subject?.image.photo_id === reframing && subject.image.composition ? { ...subject.image, composition: subject.image.composition } : null;
+  useEffect(() => {
+    if (reframing !== null && !reframed) setReframing(null);
+  }, [reframing, reframed]);
+
   /** What the strips show: the pending arrangement while the Mac answers, else the Mac's view. */
   const arranged = pending && view && pending.id === view.id ? pending : view;
   /** The same, read where a drop or a swipe is made (a second one may come before the strips are drawn again). */
@@ -464,15 +473,20 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     }} />
     <Toast toast={state.toast} />
     {view && subject && <Preview token={token} subject={subject} ratio={previewRatio(state, subject)} overlay={state.overlay} dispatch={dispatch}
-      enabled={!state.detailsOpen && confirming === null} onClose={() => dispatch({ type: 'preview', photo_id: null })} onDetails={() => {
+      enabled={!state.detailsOpen && confirming === null && reframed === null} onClose={() => dispatch({ type: 'preview', photo_id: null })} onDetails={() => {
         buzz(HAPTIC.menu);
         dispatch({ type: 'details', open: true });
       }} onSwipe={action => (action === 'main_confirm' ? setConfirming({ photo_id: subject.image.photo_id, dropped: false }) : void swipe(action))}
-      strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.detailsOpen && confirming === null}
+      strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.detailsOpen && confirming === null && reframed === null}
         onSelect={selectInPreview} onDrop={(photoId, target) => void drop(photoId, target)} pending={pending !== null} testId="preview-strip"
         marked={subject.image.photo_id} />} />}
     {view && subject && <PhotoDrawer open={state.detailsOpen} {...previewHeader(subject, previewRatio(state, subject))} hasTemplate={subject.kind === 'shot'}
-      onClose={() => dispatch({ type: 'details', open: false })} onRetake={() => void retakeShot()} />}
+      canReframe={!!subject.image.composition} onClose={() => dispatch({ type: 'details', open: false })} onRetake={() => void retakeShot()} onReframe={() => {
+        buzz(HAPTIC.select);
+        dispatch({ type: 'details', open: false });
+        setReframing(subject.image.photo_id);
+      }} />}
+    {view && reframed && <ReframeEditor key={reframed.photo_id} token={token} image={reframed} defaultShape={view.default_shape ?? '1:1'} onCancel={() => setReframing(null)} />}
     {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
       onClose={() => dispatch({ type: 'menu', open: false })} onProperties={() => {
         buzz(HAPTIC.menu);

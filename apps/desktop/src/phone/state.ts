@@ -4,6 +4,7 @@
  * `GET /session` last answered (MC-LV3: one current shot, server-side).
  */
 import { composedLayout } from '@/features/compose/composed';
+import { OVERLAY_ORDER, type OverlayKind } from '@/features/compose/useComposePrefs';
 import type { CompositionValues, Frame } from '@/services/compositions';
 import type { Hello, PhoneImage, PhoneSession, PhoneShot } from './api';
 import { ratioLabel } from './geometry';
@@ -29,7 +30,32 @@ export const TEXT = {
   imageDeleted: 'Image deleted',
   movedToMain: 'Moved to main images',
   sentToCondition: 'Sent to condition images',
+  /** LV-D21 (6): Reframe waits for the full frame the composition is measured in (the Mac's own words). */
+  reframeWaiting: "Waiting for Capture One's full-frame preview",
 } as const;
+
+/** master_plan_live §6 (v1.3): the composition guides' names (10D Overlay), in the Mac's order. */
+export const GUIDE_LABELS: Record<OverlayKind, string> = { off: 'Off', thirds: 'Thirds', grid: 'Grid', golden: 'Golden ratio', diagonals: 'Diagonals' };
+export const GUIDE_KINDS: readonly OverlayKind[] = OVERLAY_ORDER;
+/** The guides inside the reframe editor's frame, remembered on this phone (plan point P6). */
+export const REFRAME_GUIDES_KEY = 'psm.phone.reframeGuides';
+
+/** A guide choice kept on this phone; anything else stored there is `fallback`. */
+export function readGuides(key: string, fallback: OverlayKind): OverlayKind {
+  try {
+    const stored = window.localStorage.getItem(key);
+    return OVERLAY_ORDER.find(kind => kind === stored) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+export function writeGuides(key: string, kind: OverlayKind): void {
+  try {
+    window.localStorage.setItem(key, kind);
+  } catch {
+    // A phone that keeps nothing still shows the choice until the app closes.
+  }
+}
 
 /** The design's default template overlay (0–100 %, shared by live view and preview). */
 export const DEFAULT_OVERLAY = 35;

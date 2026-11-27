@@ -185,6 +185,12 @@ type EnvOptions = {
   frame?: { width: number; height: number };
 };
 
+/**
+ * LV10: the reframe editor's stage in the layout stub, 390 × 520 at (0, 0). For a 1:1 rect the frame box is then
+ * left 24, top 89, 342 × 342 (24 px margins), so `342 / 1707` screen px per source px of fixture K.
+ */
+export const REFRAME_STAGE = { left: 0, top: 0, width: 390, height: 520 };
+
 function define(target: object, name: string, value: unknown): void {
   Object.defineProperty(target, name, { configurable: true, writable: true, value });
 }
@@ -241,7 +247,10 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
   const stage = options.stage ?? { width: 390, height: 610 };
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
-    get(this: HTMLElement) { return this.classList.contains('ph-stage') || this.classList.contains('ph-dock-scroller') ? stage.width : 0; },
+    get(this: HTMLElement) {
+      if (this.classList.contains('ph-reframe-stage')) return REFRAME_STAGE.width;
+      return this.classList.contains('ph-stage') || this.classList.contains('ph-dock-scroller') ? stage.width : 0;
+    },
   });
   // LV8: a strip's scroller is as wide as the stage and its content as wide as its tiles (16 px side
   // padding, 64 px a tile, 19 px the divider), so an auto-scroll has an end to stop at.
@@ -255,7 +264,7 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
   });
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
     configurable: true,
-    get(this: HTMLElement) { return this.classList.contains('ph-stage') ? stage.height : 0; },
+    get(this: HTMLElement) { return this.classList.contains('ph-reframe-stage') ? REFRAME_STAGE.height : this.classList.contains('ph-stage') ? stage.height : 0; },
   });
   define(Element.prototype, 'getBoundingClientRect', function rect(this: HTMLElement) {
     const box = (left: number, top: number, width: number, height: number) =>
@@ -267,6 +276,7 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
       const [w, h] = turned ? [height, width] : [width, height];
       return box((stage.width - w) / 2, (stage.height - h) / 2, w, h);
     }
+    if (this.classList.contains('ph-reframe-stage')) return box(REFRAME_STAGE.left, REFRAME_STAGE.top, REFRAME_STAGE.width, REFRAME_STAGE.height);
     if (this.classList.contains('ph-dock-strip') || this.classList.contains('ph-dock-scroller')) return box(0, 700, stage.width, 84);
     if (this.hasAttribute('data-dock-k')) {
       // LV-D19: 56 px tiles on a 64 px pitch (8 px gaps), 16 px side padding; the divider takes 11 px more.
