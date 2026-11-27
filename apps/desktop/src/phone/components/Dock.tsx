@@ -2,7 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayo
 import { exampleUrl, type PhoneSession } from '../api';
 import { arrangementKey, type Drop, dropTarget, type Home } from '../arrange';
 import { buzz, DOCK, DRAG, HAPTIC } from '../gestures';
-import { type DockTile, dockTiles, tileImage } from '../state';
+import { type DockTile, dockTiles, isWaiting, tileImage } from '../state';
 import { PhotoImage } from './PhotoImage';
 
 type Pointer = ReactPointerEvent<HTMLDivElement>;
@@ -235,7 +235,8 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
     if (!element || !box || !tile || !image || shown.current.pending) return;
     const homes = Array.from(element.querySelectorAll<HTMLElement>('[data-dock-k]')).flatMap((node): Home[] => {
       const of = shown.current.tiles.find(candidate => candidate.key === node.dataset.dockK);
-      if (!of) return [];
+      // A photo on its way has no home: it is no target and counts in no insert place (plan point P2).
+      if (!of || of.kind === 'incoming' || isWaiting(of)) return [];
       const rect = node.getBoundingClientRect();
       return [{ key: of.key, kind: of.kind, centre: rect.left - box.left + element.scrollLeft + rect.width / 2, container_id: of.kind === 'shot' ? of.shot.container_id : null }];
     });
@@ -305,7 +306,8 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
     const tap = now.phase === 'pressing';
     finish(false);
     const tile = tap ? nearest(event.clientX) : undefined;
-    if (tile) onSelect(tile);
+    // A photo on its way takes no tap: there is nothing to open yet, and its shot is taken (CS4).
+    if (tile && !isWaiting(tile)) onSelect(tile);
   };
 
   /** PH9.4: the phone took the touch away (a call, a system gesture). */
@@ -335,24 +337,26 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
   };
 
   const turn = `rotate(${rotated ? 90 : 0}deg)`;
-  const firstCondition = tiles.findIndex(tile => tile.kind === 'condition');
+  const firstCondition = tiles.findIndex(tile => tile.kind === 'condition' || (tile.kind === 'incoming' && tile.group === 'condition'));
   return <div className="ph-dock-strip" ref={strip} data-testid={testId} data-drag={drag ? 'on' : after ?? undefined}
     onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onContextMenu={event => event.preventDefault()}>
     <div className="ph-dock-scroller" ref={scroller}>
       <div className="ph-dock-row">
         {tiles.map((tile, index) => {
           const image = tileImage(tile);
+          const waiting = isWaiting(tile);
           const lifted = drag?.key === tile.key;
           const slid = aside(tile);
           const transform = lifted ? `translate(${drag.dx}px, ${drag.dy}px) ${turn} scale(${DRAG.liftScale})` : slid !== 0 ? `translateX(${slid}px) ${turn}` : turn;
           return [
             index === firstCondition && <div key="divider" className="ph-dock-divider" data-testid="dock-divider" />,
             <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={outlined(tile) || undefined}
-              data-lifted={lifted || undefined} data-away={(lifted && drag.away) || undefined} data-drop={dropMark(tile)}
+              data-incoming={waiting || undefined} data-lifted={lifted || undefined} data-away={(lifted && drag.away) || undefined} data-drop={dropMark(tile)}
               className={`ph-dock-tile${tile.kind === 'free' ? ' ph-dock-free' : ''}`}
               style={{ transform, outline: `2px solid ${outlined(tile) ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
               {image && <PhotoImage token={token} image={image} className="ph-dock-image" />}
-              {!image && tile.kind === 'shot' && tile.shot.example
+              {waiting && <div className="ph-photo-wait" data-testid="photo-wait" />}
+              {!image && !waiting && tile.kind === 'shot' && tile.shot.example
                 && <img className="ph-dock-image ph-grey" alt="" draggable={false} src={exampleUrl(token, tile.shot.container_id)} />}
               {tile.kind === 'free' && <svg className="ph-dock-plus" width="50%" height="50%" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>}
               {tile.kind === 'shot' && tile.shot.split && <div className="ph-dock-split" data-testid="dock-split" style={{ left: '50%' }} />}

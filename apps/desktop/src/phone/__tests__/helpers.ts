@@ -342,6 +342,7 @@ export function chairSession(change: (session: PhoneSession) => void = () => und
   const shot = (container_id: number, final_no: number, shoot_no: number, name: string, photo_id: number | null) => ({
     container_id, final_no, shoot_no, name, ratio: 1, split: false, zoom: 0, example: true,
     photo: photo_id === null ? null : { photo_id, revision: 1, ratio: 1, preview: 'k0' },
+    incoming: false,
   });
   const session: PhoneSession = {
     id: 7,
@@ -352,9 +353,22 @@ export function chairSession(change: (session: PhoneSession) => void = () => und
     extras: [{ photo_id: PHOTO_EXTRA, revision: 1, ratio: 1, preview: 'k0' }],
     condition: [{ photo_id: PHOTO_C1, revision: 1, ratio: 1, preview: 'k0' }],
     counts: { main: 2, condition: 1 },
+    incoming: { extras: 0, condition: 0 },
   };
   change(session);
   return session;
+}
+
+/**
+ * LV9 fixture W: the chair session with a photo on its way to shot C (final 03, empty) and two on
+ * their way to the Condition images: the live dock reads "02 01 03 04 · C1", then two waiting tiles.
+ */
+export function waitingSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return chairSession(session => {
+    session.shots[2].incoming = true;
+    session.incoming = { extras: 0, condition: 2 };
+    change(session);
+  });
 }
 
 /** LV8 fixture S: the chair session with a second condition image (the strip reads "02 01 03 04 · C1 C2"). */
@@ -381,6 +395,14 @@ export function dragSession(change: (session: PhoneSession) => void = () => unde
     session.extras = [image(202), image(205), image(206)];
     session.condition = [image(203), image(207), image(208)];
     session.counts = { main: 5, condition: 3 };
+    change(session);
+  });
+}
+
+/** LV9 fixture DW: fixture D with one photo on its way to the Condition images; its waiting tile's centre is x 703. */
+export function dragWaitingSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return dragSession(session => {
+    session.incoming = { extras: 0, condition: 1 };
     change(session);
   });
 }

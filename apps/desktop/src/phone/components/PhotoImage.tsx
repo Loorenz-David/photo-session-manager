@@ -19,8 +19,9 @@ type Props = {
 /**
  * A photo's preview, never a broken image (master_plan_live §5 PH6a, finding F7). The Mac is asked
  * only once it says the preview exists (`image.preview` is a string); until then, and whenever the
- * picture fails to load, a plain placeholder shows instead. A failed load is tried again three
- * times, two seconds apart; a new `preview` value or `revision` starts over.
+ * picture fails to load, a placeholder with the loading cue shows instead. A failed load is tried
+ * again three times, two seconds apart, then the placeholder stops moving (`data-gave-up`); a new
+ * `preview` value or `revision` starts over.
  */
 export function PhotoImage({ token, image, className, style, testId, children }: Props) {
   const key = `${image.photo_id}:${image.revision}:${image.preview}`;
@@ -35,7 +36,8 @@ export function PhotoImage({ token, image, className, style, testId, children }:
   }, [waiting, key, now.attempt]);
 
   const src = previewUrl(token, image, now.attempt);
-  if (src === null || now.failed) return <div className="ph-photo-wait" data-testid="photo-wait">{children}</div>;
+  // LV-D21 (1), plan point P3: a picture that failed every retry is not on its way; its placeholder is plain grey.
+  if (src === null || now.failed) return <div className="ph-photo-wait" data-testid="photo-wait" data-gave-up={(now.failed && !waiting) || undefined}>{children}</div>;
   return <img className={className} style={style} data-testid={testId} alt="" draggable={false} src={src}
     onError={() => setLoad({ key, attempt: now.attempt, failed: true })} />;
 }

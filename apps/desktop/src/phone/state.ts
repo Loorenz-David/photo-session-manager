@@ -243,14 +243,23 @@ export type DockTile =
   | { key: string; kind: 'shot'; shot: PhoneShot; tag: string; label: string; current: boolean }
   | { key: string; kind: 'extra'; image: PhoneImage; tag: string; label: string; current: false }
   | { key: 'free'; kind: 'free'; tag: ''; label: string; current: boolean }
-  | { key: string; kind: 'condition'; image: PhoneImage; tag: string; label: string; current: false };
+  | { key: string; kind: 'condition'; image: PhoneImage; tag: string; label: string; current: false }
+  /** LV-D21 (1): a photo on its way to the end of a group (PH6b); it has no number yet. */
+  | { key: string; kind: 'incoming'; group: 'extra' | 'condition'; tag: ''; label: string; current: false };
+
+/** master_plan_live §6 (v1.3): what a group's waiting tile is called. */
+export const INCOMING_LABEL = 'Photo on its way';
 
 /**
  * The dock's tiles: template shots in shooting order with their final numbers (card LV5), extra
- * Main images (tag = Main position), the Free shot tile, then the Condition images (C1…).
+ * Main images (tag = Main position) and the photos on their way to them, the Free shot tile, then
+ * the Condition images (C1…) and the photos on their way to those.
  */
 export function dockTiles(view: PhoneSession): DockTile[] {
   const now = currentShot(view);
+  const incoming = (group: 'extra' | 'condition', count: number) => Array.from({ length: count }, (_, index): DockTile => ({
+    key: `w${group}${index + 1}`, kind: 'incoming', group, tag: '', label: INCOMING_LABEL, current: false,
+  }));
   return [
     ...view.shots.map((shot): DockTile => ({
       key: `s${shot.container_id}`, kind: 'shot', shot, tag: pad(shot.final_no), label: `${pad(shot.final_no)} · ${shot.name}`, current: shot === now,
@@ -258,15 +267,23 @@ export function dockTiles(view: PhoneSession): DockTile[] {
     ...view.extras.map((image, index): DockTile => ({
       key: `p${image.photo_id}`, kind: 'extra', image, tag: pad(extraPosition(view, index)), label: `${pad(extraPosition(view, index))} · Extra image`, current: false,
     })),
+    ...incoming('extra', view.incoming.extras),
     { key: 'free', kind: 'free', tag: '', label: 'Free shot · no template', current: now === null },
     ...view.condition.map((image, index): DockTile => ({
       key: `p${image.photo_id}`, kind: 'condition', image, tag: `C${index + 1}`, label: `Condition ${pad(index + 1)}`, current: false,
     })),
+    ...incoming('condition', view.incoming.condition),
   ];
 }
 
 /** The image a dock tile shows, if it has one. */
-export const tileImage = (tile: DockTile): PhoneImage | null => (tile.kind === 'shot' ? tile.shot.photo : tile.kind === 'free' ? null : tile.image);
+export const tileImage = (tile: DockTile): PhoneImage | null => (tile.kind === 'shot' ? tile.shot.photo : tile.kind === 'extra' || tile.kind === 'condition' ? tile.image : null);
+
+/**
+ * LV-D21 (1): the tile stands for a photo on its way (a template shot the camera has fired for, or
+ * a group's waiting tile). It shows the loading cue and takes no tap, lift or drop (plan point P2).
+ */
+export const isWaiting = (tile: DockTile): boolean => tile.kind === 'incoming' || (tile.kind === 'shot' && tile.shot.photo === null && tile.shot.incoming);
 
 /** What an open preview shows: a template shot's photo, an extra Main image, or a Condition image. */
 export type PreviewSubject =

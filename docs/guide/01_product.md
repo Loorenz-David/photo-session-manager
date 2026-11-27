@@ -269,9 +269,16 @@ label printed itself. Same key and store as conversations; labels need the scope
     finger, the phone taking the touch away, leaving the app, the Mac changing the photos meanwhile, or letting go
     more than 48 px above or below the strip puts the photo back and asks nothing. **The drop shows at once**; if
     the Mac refuses, the strip goes back and the phone says why; after 8 s without an answer it goes back and asks the
-    Mac again. An empty shot and the Free shot tile never lift (their long press is a tap). A photo whose
-    preview the Mac has not made yet shows a plain grey tile with its number; the picture appears by itself, never
-    a broken image. **Next** jumps to the next empty shot in shooting
+    Mac again. An empty shot and the Free shot tile never lift (their long press is a tap). **A photo on its way
+    shows a quiet loading cue from the shutter until its picture** (LV9, book 10J LV-D21 (1)), in the live screen's
+    strip and in the Preview's: a template shot the camera has fired for shows a slow light moving over grey in
+    place of its template picture and keeps its number; a capture on its way to the Condition images (or to the end
+    of Main in a session without a template) shows a waiting tile at the end of that group. "On its way" is the
+    Mac's own rule: from the reported shutter until the photo exists on the Mac, at most 5 minutes. Waiting tiles
+    take no tap, never lift, are no drop target, and one appearing never cancels a drag. Once the photo exists its
+    own tile keeps the cue until its picture is there; the picture appears by itself, never a broken image. A
+    picture that failed to load after three more tries is plain grey (it is not on its way); with Reduce Motion on
+    nothing moves at all. **Next** jumps to the next empty shot in shooting
     order, then to Free shot. In Free shot live is always on (there is no template to show).
   - **Preview.** A captured image with Back, **Retake** (template shots: the photo is denied at once, undoable on the
     Mac, and the shot is current again) and **Move image**: any Main position, a new extra, or the Condition group; a

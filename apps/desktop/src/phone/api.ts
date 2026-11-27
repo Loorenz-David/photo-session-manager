@@ -63,6 +63,8 @@ export type PhoneShot = {
   zoom: number;
   example: boolean;
   photo: PhoneImage | null;
+  /** PH6b: no photo yet, and a reported shutter whose photo is on its way is bound to this shot. */
+  incoming: boolean;
 };
 export type PhoneCurrent = { kind: 'shot'; container_id: number } | { kind: 'free' };
 export type PhoneSession = {
@@ -77,6 +79,11 @@ export type PhoneSession = {
   extras: PhoneImage[];
   condition: PhoneImage[];
   counts: { main: number; condition: number };
+  /**
+   * PH6b: the reported shutters whose photo is on its way to a group: the end of Main in a session
+   * without a template (`extras`), the Condition images in a templated one (`condition`).
+   */
+  incoming: { extras: number; condition: number };
 };
 export type PhoneSessionView = { session: PhoneSession | null };
 /** PH4 `POST /photos/<id>/move` targets. */

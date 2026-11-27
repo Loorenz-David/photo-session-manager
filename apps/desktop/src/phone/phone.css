@@ -174,7 +174,8 @@ body,
 .ph-grey {
   filter: grayscale(1);
 }
-/* A photo whose preview is not ready, or did not load: a plain fill instead of a broken image (PH6a). */
+/* A photo that is on its way, whose preview is not ready, or that did not load: a grey fill instead of a broken
+   image (PH6a). The grey is the chip border's, a step darker than --ph-fill, so the cue's light has room to show. */
 .ph-photo-wait {
   position: absolute;
   inset: 0;
@@ -182,7 +183,7 @@ body,
   align-items: center;
   justify-content: center;
   border-radius: inherit;
-  background: var(--ph-fill);
+  background: var(--ph-chip-border);
   color: var(--ph-secondary);
   font-size: 13px;
   pointer-events: none;
@@ -190,15 +191,16 @@ body,
   overflow: hidden;
   isolation: isolate;
 }
-/* A faint band of light crossing the grey, slowly: the photo is on its way, nothing to wait for. The peak is white
-   over --ph-fill (#f1f1ef), about 6 % lighter. Parked out of sight (left of the tile) when it does not move. */
+/* A quiet band of light crossing the grey, slowly: the photo is on its way, nothing to wait for. Its peak is white
+   at 80 % over the grey (#e2e2e0 → #f9f9f9), about 10 % lighter (LV-D21 (1), plan point P3; LV7's was about 5 %).
+   Parked out of sight (left of the tile) when it does not move. */
 .ph-photo-wait::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   background: linear-gradient(100deg, transparent 20%, var(--ph-white) 50%, transparent 80%);
-  opacity: 0.9;
+  opacity: 0.8;
   transform: translateX(-100%);
   animation: ph-photo-sweep 1.8s linear infinite;
   pointer-events: none;
@@ -206,6 +208,10 @@ body,
 @keyframes ph-photo-sweep {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+/* A picture that failed every retry is not on its way: plain grey, nothing moves (plan point P3). */
+.ph-photo-wait[data-gave-up]::before {
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .ph-photo-wait::before {

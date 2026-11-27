@@ -345,7 +345,7 @@ async function shoot(): Promise<void> {
 /** The plan's fixture with a fourth shot D (final 04), empty and current. */
 const D = 14;
 const withFourth = (photo: number | null) => chairSession(s => {
-  s.shots.push({ container_id: D, final_no: 4, shoot_no: 4, name: 'Detail', ratio: 1, split: false, zoom: 0, example: false, photo: photo === null ? null : { photo_id: photo, revision: 1, ratio: 1, preview: 'k0' } });
+  s.shots.push({ container_id: D, final_no: 4, shoot_no: 4, name: 'Detail', ratio: 1, split: false, zoom: 0, example: false, photo: photo === null ? null : { photo_id: photo, revision: 1, ratio: 1, preview: 'k0' }, incoming: false });
   s.extras = [];
   s.current = { kind: 'shot', container_id: D };
 });

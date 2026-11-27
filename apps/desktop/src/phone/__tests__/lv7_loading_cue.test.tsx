@@ -69,7 +69,8 @@ test('lv7_c2a_reduced_motion_turns_the_sweep_off', () => {
   const reduced = REDUCED.exec(CSS);
   expect(reduced).not.toBeNull();
   // The same selector that moves is the one stopped.
-  const moving = rulesOf(always).filter(rule => rule.selector.startsWith('.ph-photo-wait') && /animation:/.test(rule.body)).map(rule => rule.selector);
+  // LV9 (plan point P3): the rule that stops a gave-up placeholder (`animation: none`) is not one that moves.
+  const moving = rulesOf(always).filter(rule => rule.selector.startsWith('.ph-photo-wait') && /animation:\s*(?!\s|none)/.test(rule.body)).map(rule => rule.selector);
   const stopped = rulesOf(reduced![1]).filter(rule => /(?:^|[;\s])animation:\s*none;/.test(rule.body)).map(rule => rule.selector);
   expect(moving).toHaveLength(1);
   expect(stopped).toEqual(moving);
