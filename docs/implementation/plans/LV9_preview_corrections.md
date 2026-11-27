@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV9 — Preview corrections (book 10J LV-D21 (1)–(4))
 
-**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units, checkpoints `75c1b755`, `59cefe03`, `7ad59d7f`, `7b9d7df1`; 44 rows → 53 tests (8 Rust `lv9_phone_incoming::`, 45 phone UI in `lv9_{core,incoming,one_step,preview}`); closing gate on clean `7b9d7df1`: `cargo test --workspace` 2782 passed / 0 failed, clippy, fmt, sidecar stub, typecheck green, `npm test` 158 files / 1172 passed / 0 failed; nothing seen on a phone or in a browser (handoff `handoff_LV9_preview_corrections_implement_r1.md`).
+**Tracker:** APPROVED (2026-11-27, opus) — review r1 APPROVED_WITH_NOTES: perimeter = the 32 declared code/test/guide paths of `75c1b755`…`7b9d7df1` (`git diff --stat 75c1b755^ 7b9d7df1`) + this plan in `1e4a1fbf`; reviewer run on code tree `7b9d7df1`: `lv9_phone_incoming::` 8 passed, phone tests 18 files / 217 passed, typecheck and build green; the implementer's full-suite stamp stands (2782 Rust, 1172 UI); all 44 rows have a boundary test that fails on a wrong outcome; `incoming` from CS4a's set in core with the route unchanged (H8), waiting tiles outside homes/targets/`arrangementKey`, photo-keyed tiles, no revision in any preview URL, one pending chain with PH9.5a's four ends, lift home only for a template shot's photo while lifted, Preview without header or button block — all confirmed by reading; changed/removed earlier tests = the plan's list + 4 disclosed deviations, none weakened; no assumption contradicts 10J; H1–H8 hold; 5 notes in `backlog_live/LV9_preview_corrections.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -513,3 +513,46 @@ true); U4 11 of 11 failed before. **U1 and U2 have no red baseline** (their test
   Mac (`shot_filled`) as before LV9. Outside this plan's rows; candidate for the backlog.
 - Nothing was seen on a phone or in a browser: the cue's strength, the lift home's place, the bar and the drawer are
   CSS written by reasoning; jsdom proves structure and requests only.
+
+### 2026-11-27 — review r1 (opus): APPROVED_WITH_NOTES
+**Verified correct.** Gate: Tracker `IMPLEMENTED`; checkpoints `75c1b755`, `59cefe03`, `7ad59d7f`, `7b9d7df1` and the
+close `1e4a1fbf` in `git log`. Perimeter: `git diff --stat 75c1b755^ 7b9d7df1` = exactly the handoff's 32 code, test and
+guide paths (4 Rust, 10 phone sources incl. `MoveDrawer.tsx` removed and `PhotoDrawer.tsx` new, 15 phone tests incl.
+`helpers.ts`, 3 guide files); `1e4a1fbf` = this plan only. Review mode, run once on code tree `7b9d7df1`:
+`cargo test -p psm-testkit --test suite lv9_phone_incoming::` 8 passed; `npx vitest run src/phone` 18 files, 217
+passed; `npm run typecheck` exit 0; `npm run build` exit 0 (chunk-size warning only). The implementer's closing gate
+stands (`cargo test --workspace` 2782, clippy, fmt, sidecar stub, `npm test` 1172).
+- **U1 (read).** `phone_view` reads `current_shot::shot_plan` once at `now` inside its transaction: `held` (holds bound
+  to a template container) → `PhoneShot.incoming = photo.is_none() && held.contains(id)`; new `held_free` (holds bound
+  to no container, or to one no longer in the template) → `incoming.condition`; untemplated → `hold_times(...).len()`
+  → `incoming.extras`. Exactly PH6b; route, events and schema unchanged (H8, H7). Tests use the real ledger, filing and
+  arrival paths, the 301 s window, the real delete and the paired HTTP route.
+- **U2 (read).** `dockTiles` adds `w<group><n>` tiles after the extras / Condition images; `isWaiting` covers them and
+  a photo-less `incoming` shot. `Dock`: waiting tiles have no home (so no target, no insert index, no lift), a tap on
+  one selects nothing; `arrangementKey` reads photo ids only. `PhotoImage` marks `data-gave-up` only after the last
+  retry; CSS stops the sweep for it.
+- **U3 (read).** Every tile with a photo is `p<photo_id>` in one flat keyed list; `previewUrl` and `PhotoImage`'s key
+  carry no revision. One `Chain` for drops and swipes: `ask` applies each change to `shownNow` (the pending
+  arrangement), each request has its own 8 s bound stopped by its answer (c); after the last answer only a read
+  numbered after it ends the chain (a), or the follow bound (d); `refusedAhead` + `refused` (b). Swipes use `applyDrop`
+  `remove` / `to_main` / `to_condition`; the next photo is `nextPhoto` of what the strips show. The lift home is drawn
+  only while `drag.home` is set, which `liftAt` sets only for a shot tile; it has no `data-dock-k`.
+- **U4 (read).** `Preview` draws the photo, the strip and the two-button bar; root `aria-label` = kicker; the
+  "TEMPLATE" pill and overlay readout only while holding. `PhotoDrawer` (kicker, title, chip, hint and Retake only for
+  a template shot's photo); it closes on ×, backdrop, and with its Preview (`reduce` `preview`). `enabled` is off for
+  the photo and the strip while it (or the confirm sheet) is open. `MoveDrawer`, `moveTiles`, `MoveTile`, `backLabel`,
+  `move` gone.
+- **Tests.** Each of the 44 rows has a test at its boundary asserting the row's exact outcome (element identity for
+  C7, `stripFrames` frame lists for C8(a)/C9, exact POST lists, vibrations, toasts, `aria-hidden`). C9(b) answers at
+  7.9 s and holds the read past 8 s, so LV8's old timer would have flashed back; C9(c) taps 205 where the pending
+  arrangement put it. C8(b) as written closes the Preview (207 is last); the extra test from 203 covers the Preview's
+  strip. Changed and removed earlier tests = the plan's list plus the four disclosed ones (`lv7_c2a`'s filter skips
+  `animation: none` and still catches any moving rule; `lv6_c5b` went with the Move drawer; four `kicker` helpers read
+  the `aria-label`; `lv3_main` fixture field); none weakens its row.
+- **Assumptions 1–8** read against 10J LV-D21, PH6b, PH9.5a and PH10: none contradicts them (all go to the narrative).
+- **H1–H8:** rule in `crates/core`, route thin (H8); no platform concept in core (H7); Deny still hides (H2); no
+  external write, no pixel work, no UI automation; no secrets, no live service in tests.
+
+**Notes** (in `backlog_live/LV9_preview_corrections.md`): a pending chain hides Mac-side changes (the new cue
+included) until it ends; no test for a waiting shot as a non-target; Next still offers a shot whose photo is on its
+way; all placeholders one step darker; backlog location in the review template.
