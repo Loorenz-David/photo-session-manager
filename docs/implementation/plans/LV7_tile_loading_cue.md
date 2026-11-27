@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV7 — Tile loading cue (owner request R2 at the hardware check)
 
-**Tracker:** IMPLEMENTED (2026-11-27, fable) — the waiting placeholder sweeps (CSS only, 1.8 s, off under reduced motion); 4 new tests for the 4 rows; phone tests 107 passed, `npm test` 1062 passed, typecheck and build green.
+**Tracker:** APPROVED (2026-11-27, opus) — review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of `009ac38b` (nothing outside `apps/desktop/src/phone/` and the guide); phone tests 107 passed, typecheck and build green (reviewer run on `8fec7f7c`); all 4 rows have a boundary test that fails on a wrong outcome; peak ~5 % lighter than the fill (limit ~12 %); reduced-motion rule present; H1–H8 hold; notes in `backlog_live/LV7_tile_loading_cue.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -114,3 +114,24 @@ file only (typing of `matchAll` callbacks, then that import); fixed, and typeche
 re-run green. `npm test` (1062 passed) ran before that fix; the fix changed only the new test file, which the
 phone-tests re-run covers. The look was not seen on a phone or in a browser in this session: rows are proven on the
 markup and the stylesheet text (jsdom runs no animation); step 2 of the manual try-out is the visual check.
+
+### 2026-11-27 — review r1 (opus): APPROVED_WITH_NOTES
+**Verified correct.** Perimeter: `git show --stat 009ac38b` = the four declared paths (`phone.css`, the new
+`lv7_loading_cue.test.tsx`, `docs/guide/02_architecture.md`, this plan); nothing outside `apps/desktop/src/phone/` and
+the guide; `PhotoImage.tsx` unchanged. Unit test commands run once on `8fec7f7c`: `npx vitest run src/phone` 10 files,
+107 passed; `npm run typecheck` exit 0; `npm run build` exit 0 (chunk-size warning only). The implementer's
+`npm test` stamp (1062) stands: the later fix touched only the new test file, covered by the phone run. CSS read:
+`.ph-photo-wait` is positioned, `overflow: hidden` clips the band to the tile, `isolation: isolate` + `z-index: -1`
+paints the band over the grey fill and under the placeholder's text; peak = white at opacity 0.9 over `#f1f1ef`
+≈ 254 vs 241, about 5 % lighter (limit ~12 %); `@keyframes ph-photo-sweep`, `1.8s linear infinite`; the
+reduced-motion block sets `animation: none` on the same `::before` selector, whose resting transform parks it outside
+the clipped tile, so the tile is plain grey. Rows: C1(a) asserts the class on the real placeholder and the single
+animation declaration's keyframes, duration range and `infinite` from the shipped stylesheet; C1(b) sends a session
+message with a preview and asserts the placeholder gone and the exact preview URL on the `<img>` (`PhotoImage`
+swaps as soon as the token is a string, LV6 behaviour kept); C2(a) asserts the reduced-motion rule stops exactly the
+selector that animates; C3(a) asserts `pointer-events: none` on placeholder and band, one `/capture` post
+`{session_id: 7}` with a waiting tile, and a tap on the waiting tile opens its Preview. Each fails on a wrong outcome;
+none asserts internals. Assumptions 1–4 do not contradict 10J or the plan (task 3 ties the sweep to the placeholder).
+H1–H8: CSS and one test file; nothing touched. Guide line updated.
+**Notes** (`backlog_live/LV7_tile_loading_cue.md`): a picture that gave up after its retries sweeps forever, so it
+looks like it is still arriving; the test reads `phone.css` by a path relative to `apps/desktop`.
