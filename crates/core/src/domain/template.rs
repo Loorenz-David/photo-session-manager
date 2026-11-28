@@ -46,6 +46,14 @@ pub struct PlaceRow {
     pub key_at: Option<i64>,
     pub key_name: Option<String>,
     pub pending_zoom: Option<u8>,
+    /// None means the photo predates current-shot binding.
+    pub shot: Option<ShotBinding>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShotBinding {
+    /// None means the exposure was deliberately aimed at Condition (Free).
+    pub container_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +62,7 @@ pub struct ShotKey {
     pub at: i64,
     pub name: Option<String>,
     pub released: bool,
+    pub exposure_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

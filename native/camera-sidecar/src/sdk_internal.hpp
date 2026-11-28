@@ -31,6 +31,8 @@ using CrlabDeviceConnectionVersion = SDK::DeviceConnectionVersion;
 
 namespace crlab {
 
+enum class WriteIntent { StoreDestination, FocusPoint, HalfPress, ShutterRelease };
+
 inline std::string cr_str(const CrChar* s) { return s ? std::string(s) : std::string(); }  // CrChar == char on macOS
 std::string id_to_string(const DiscoveredCamera& cam, const CrInt8u* id, CrInt32u size);
 Transport transport_from_connect_type(const std::string& t);
@@ -79,6 +81,7 @@ struct CameraSession::Impl final : public SDK::IDeviceCallback {
   std::deque<ExposureWait> awaiting_exposure;
   int af_status = 0;          // last CrWarningExt_AFStatus param (1 unlocked, 2 focused, 3 not focused)
   uint64_t af_status_seq = 0; // increments on every AF status notification
+  bool cancel_focus = false;
   std::string save_dir;
 
   // --- IDeviceCallback ---------------------------------------------------------
@@ -123,6 +126,7 @@ struct CameraSession::Impl final : public SDK::IDeviceCallback {
   bool set_property_verified(uint32_t code, uint64_t value, uint32_t type, int timeout_ms, int64_t* waited_ms,
                              uint32_t* sdk_error, uint64_t* last_read = nullptr, bool* read = nullptr);
   bool read_property(uint32_t code, uint64_t* value, uint32_t* type);
+  uint32_t write_camera(WriteIntent intent, uint64_t value, uint32_t type);
 };
 
 }  // namespace crlab

@@ -13,7 +13,9 @@ pub mod fake_trash;
 pub mod fixtures;
 pub mod ftp_client;
 pub mod isolation;
+pub mod live_outlet;
 pub mod logs;
+pub mod phone;
 pub mod test_app;
 
 pub use test_app::{

@@ -1,0 +1,123 @@
+//! LV2 (`master_plan_live.md` §4.7): `TestPhone` — the real `PhoneServer` on `127.0.0.1:0` over a
+//! TestApp's handles, a temporary web root (`phone.html` = `<p>phone</p>`, `assets/app.js`, and a
+//! file `secret` beside the web root) and short `PhoneTimings`.
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
+use psm_integrations::{
+    AppHandles,
+    phone::{
+        host::HostInfo,
+        pairing::PhonePairings,
+        server::{HandlesFn, PhoneConfig, PhoneServer, PhoneTimings},
+    },
+};
+
+use crate::TestApp;
+
+/// The Mac's name the test server reports.
+pub const TEST_MAC_NAME: &str = "Test-Mac";
+/// The bytes of `assets/app.js` in the test web root.
+pub const APP_JS: &[u8] = b"console.log('phone');\n";
+
+struct TestHost;
+impl HostInfo for TestHost {
+    fn local_host_name(&self) -> Option<String> {
+        Some(TEST_MAC_NAME.into())
+    }
+    fn private_ipv4(&self) -> Option<Ipv4Addr> {
+        Some(Ipv4Addr::LOCALHOST)
+    }
+}
+
+pub struct TestPhone {
+    pub server: PhoneServer,
+    /// Holds `web/` (the web root) and `secret` beside it.
+    pub dir: tempfile::TempDir,
+}
+
+impl TestPhone {
+    /// Short timings: ping 200 ms, idle close 600 ms, stalled write close 500 ms.
+    pub fn start(a: &TestApp) -> Self {
+        Self::start_with(
+            a,
+            PhoneTimings {
+                ping: Duration::from_millis(200),
+                idle_close: Duration::from_millis(600),
+                stall_close: Duration::from_millis(500),
+            },
+        )
+    }
+
+    pub fn start_with(a: &TestApp, timings: PhoneTimings) -> Self {
+        let handles = a.app.handles();
+        Self::start_resolving(a, timings, Arc::new(move || Ok(handles.clone())))
+    }
+
+    /// The server resolves its handles from `current` on every request, as the desktop does from
+    /// its app state: the test stores the rebuilt App's handles there after a settings save
+    /// (LV3·C28). The app's own timings: a socket nobody reads during the rebuild stays open.
+    pub fn start_following(a: &TestApp, current: Arc<Mutex<AppHandles>>) -> Self {
+        Self::start_resolving(
+            a,
+            PhoneTimings::default(),
+            Arc::new(move || Ok(current.lock().unwrap().clone())),
+        )
+    }
+
+    fn start_resolving(a: &TestApp, timings: PhoneTimings, handles: HandlesFn) -> Self {
+        let dir = tempfile::tempdir().expect("temp web root");
+        let web = dir.path().join("web");
+        std::fs::create_dir_all(web.join("assets")).unwrap();
+        std::fs::write(web.join("phone.html"), b"<p>phone</p>").unwrap();
+        std::fs::write(web.join("assets/app.js"), APP_JS).unwrap();
+        std::fs::write(dir.path().join("secret"), b"secret").unwrap();
+        let server = PhoneServer::start(
+            PhoneConfig {
+                enabled: true,
+                bind: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                port: 0,
+                web_root: Some(web),
+                timings,
+                host: Arc::new(TestHost),
+            },
+            handles,
+            a.live_hub(),
+        );
+        assert!(server.local_addr().is_some(), "{:?}", server.status());
+        Self { server, dir }
+    }
+
+    /// `http://127.0.0.1:<port><path>`.
+    pub fn url(&self, path: &str) -> String {
+        format!(
+            "http://{}{path}",
+            self.server.local_addr().expect("listening")
+        )
+    }
+
+    /// `ws://127.0.0.1:<port><path>`.
+    pub fn ws_url(&self, path: &str) -> String {
+        format!(
+            "ws://{}{path}",
+            self.server.local_addr().expect("listening")
+        )
+    }
+
+    /// A new pairing's token.
+    pub fn pair(&self, a: &TestApp) -> String {
+        PhonePairings::new(a.store(), a.clock.as_ref())
+            .create(None)
+            .expect("pairing")
+            .token
+    }
+
+    /// The web root.
+    pub fn web_root(&self) -> PathBuf {
+        self.dir.path().join("web")
+    }
+}

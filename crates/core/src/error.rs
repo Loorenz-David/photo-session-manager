@@ -6,6 +6,16 @@ pub enum Error {
     TemplateImageUnreadable,
     #[error("no_template")]
     NoTemplate,
+    #[error("shot_filled")]
+    ShotFilled,
+    #[error("session_changed")]
+    SessionChanged,
+    #[error("not_in_template")]
+    NotInTemplate,
+    #[error("pairing_unknown")]
+    PairingUnknown,
+    #[error("phone_port_invalid")]
+    PhonePortInvalid,
     /// T4: Shift the rest back with no denied photo before a template-placed one.
     #[error("There is nothing to shift back")]
     NothingToShift,
@@ -22,6 +32,9 @@ pub enum Error {
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]
     FrameUnknown,
+    /// PH4b: a save at a revision the stored composition no longer has (it changed meanwhile).
+    #[error("composition_changed")]
+    CompositionChanged,
     /// Export or publish refused while main or condition photos need re-framing (10D MC-27
     /// §Revisions); `photos` are their labels in display order (`Main 02`, `Condition 01`).
     #[error("Re-frame first: {}", photos.join(", "))]
@@ -73,6 +86,8 @@ pub enum Error {
     /// The direct camera adapter has no SDK session (10E MC-31).
     #[error("camera_not_connected")]
     CameraNotConnected,
+    #[error("focus_unsupported")]
+    FocusUnsupported,
     /// A reconnect is offered only on a Wi-Fi session (10E MC-33 R-I29).
     #[error("reconnect_on_cable_refused")]
     ReconnectOnCableRefused,

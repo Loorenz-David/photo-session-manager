@@ -31,6 +31,22 @@ pub struct CameraSettingsDto {
     pub auto_take_back: Option<bool>,
 }
 
+/// `phone` (LV2, §4.5): the phone server's switch and port (default on, 8686).
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct PhoneSettingsDto {
+    pub enabled: bool,
+    pub port: u16,
+}
+
+/// A partial `phone` update: absent fields stay as stored.
+#[derive(Serialize, Deserialize, Type, Clone, Default)]
+pub struct PhoneSettingsPatchDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+}
+
 /// Changelog 47 (P69): `export.prepare_masters` (Settings → Storage; default on).
 #[derive(Serialize, Deserialize, Type, Clone)]
 pub struct ExportSettingsDto {
@@ -128,6 +144,9 @@ pub struct SettingsDto {
     /// Settings → Research (R6·U2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research: Option<ResearchSettingsDto>,
+    /// Settings → Phone (LV2); always present on read (the stored value or its default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<PhoneSettingsDto>,
 }
 
 /// A partial update: absent fields stay as stored.
@@ -161,6 +180,8 @@ pub struct SettingsPatchDto {
     pub export: Option<ExportSettingsDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub research: Option<ResearchSettingsDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<PhoneSettingsPatchDto>,
 }
 
 fn to_dto(mut value: serde_json::Value) -> Result<SettingsDto, CommandError> {
@@ -220,7 +241,11 @@ pub async fn settings_set(
 ) -> Result<SettingsDto, CommandError> {
     let patch =
         serde_json::to_value(&patch).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    to_dto(state.settings_set(&patch)?)
+    let saved = state.settings_set(&patch)?;
+    if patch.get("phone").is_some() {
+        crate::commands::phone::settings_saved(&saved);
+    }
+    to_dto(saved)
 }
 
 /// Settings → Storage (10F §4): free space on the disk holding the capture root, the space each

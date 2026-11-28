@@ -206,8 +206,8 @@ impl TestApp {
         self.app.reopen()?;
         Ok(support)
     }
-    /// Deliver a camera file to the ledger, then let the watcher accept its final name.
-    pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
+    /// File a camera delivery without taking it into the session's photo list yet.
+    pub fn file_photo(&self, name: &str) -> Result<String> {
         use sha2::{Digest, Sha256};
         let bytes = name.as_bytes();
         let staged = self
@@ -235,9 +235,19 @@ impl TestApp {
             .expect("delivery recorded")
             .final_path
             .clone();
-        self.app.arrival.watcher_event(Path::new(&final_path))?;
-        self.tick(1_000)?;
         Ok(final_path)
+    }
+    /// Take a previously filed delivery into the photo list.
+    pub fn take_in_photo(&self, final_path: &str) -> Result<()> {
+        self.app.arrival.watcher_event(Path::new(final_path))?;
+        self.tick(1_000)?;
+        Ok(())
+    }
+    /// Deliver a camera file to the ledger, then let the watcher accept its final name.
+    pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
+        let path = self.file_photo(name)?;
+        self.take_in_photo(&path)?;
+        Ok(path)
     }
     pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
         self.app.settings_set(patch)
@@ -254,6 +264,7 @@ impl TestApp {
             )
             .with_camera(self.app.camera.as_ref())
             .with_follow(self.app.follow.as_ref())
+            .with_events(self.app.events.as_ref())
     }
     /// "Take the camera back" over the app's camera runtime (P48).
     pub fn take_back(&self) -> psm_integrations::camera::direct::TakeBackService {
@@ -817,6 +828,12 @@ impl TestApp {
     }
     pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
         self.app.camera_runtime.clone()
+    }
+    pub fn live_hub(&self) -> Arc<psm_core::services::live_view::LiveViewHub> {
+        self.app.camera_runtime.live_hub()
+    }
+    pub fn inject_sidecar_directive(&self, directive: &str) -> Result<()> {
+        self.inject_line(directive)
     }
     /// `CameraService::capture` over the app's camera provider.
     pub fn capture(&self) -> Result<psm_core::domain::camera::CaptureId> {

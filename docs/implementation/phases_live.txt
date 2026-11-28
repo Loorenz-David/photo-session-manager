@@ -1,0 +1,19 @@
+# Live preview (book 10J, branch feature/live-preview), single-track order. One runner phase each (flow.md §10; master_plan_live.md §2–§3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). No projection, no inventory session (master_plan_live.md §3).
+# LV3 and LV6 carry `implementer: fable` (owner 2026-11-26; phone UI); LV1, LV2 and LV5 never do (camera, backend).
+# LV4 is owner-attended: the orchestrator runs it with the owner; if the runner starts it, its task 0 answers BLOCKED.
+# LV4 was paused part-way on 2026-11-26 for fixes; LV5 and LV6 (master_plan_live.md v1.1) run before it resumes. LV4 stays last.
+# Owner card 1 answered 2026-11-26: the phone's "Article number" is the item's barcode (Shopify product barcode).
+LV1_camera_live_view
+LV2_current_shot_and_phone_server
+LV3_phone_app
+LV5_live_fixes
+LV6_phone_dock
+LV4_hardware_check
+LV7_tile_loading_cue
+# v1.2 (2026-11-27, LV-D20): LV8 sort and arrange on the phone, implementer: fable, after LV7 (master_plan_live.md §2, §9).
+LV8_phone_sort_and_arrange
+# v1.3 (2026-11-27, LV-D21): LV9 preview corrections, then LV10 zoom, reframe and guides; both implementer: fable (master_plan_live.md §2, §9).
+LV9_preview_corrections
+LV10_zoom_reframe_guides

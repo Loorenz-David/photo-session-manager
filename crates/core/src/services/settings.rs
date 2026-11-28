@@ -53,6 +53,7 @@ impl SettingsService {
                 "research",
                 "writer",
                 "conversations",
+                "phone",
             ]
             .contains(&key.as_str())
             {
@@ -115,6 +116,34 @@ impl SettingsService {
                 };
                 export.insert("prepare_masters".into(), Value::Bool(prepare));
                 next[key] = Value::Object(export);
+                continue;
+            }
+            if key == "phone" {
+                // LV2 (§4.5, §6): `{"enabled"?: bool, "port"?: u16}`; the fields given replace
+                // those stored. The port is refused below 1024, on the FTP control port and inside
+                // the FTP passive range (`phone_port_invalid`).
+                let Some(fields) = value.as_object().filter(|fields| {
+                    fields.iter().all(|(field, v)| match field.as_str() {
+                        "enabled" => v.is_boolean(),
+                        "port" => v.is_u64(),
+                        _ => false,
+                    })
+                }) else {
+                    return Err(Error::InvalidValue("phone".into()));
+                };
+                if let Some(port) = fields.get("port").and_then(Value::as_u64)
+                    && !valid_phone_port(port, current.get("camera"))
+                {
+                    return Err(Error::PhonePortInvalid);
+                }
+                let mut phone = match current.get("phone") {
+                    Some(Value::Object(stored)) => stored.clone(),
+                    _ => serde_json::Map::new(),
+                };
+                for (field, v) in fields {
+                    phone.insert(field.clone(), v.clone());
+                }
+                next[key] = Value::Object(phone);
                 continue;
             }
             if key == "camera" && !valid_camera(value) {
@@ -180,6 +209,22 @@ impl SettingsService {
         Ok(next)
     }
 }
+/// §6 port rule: 1024–65535, not the FTP control port, not inside the FTP passive range (the
+/// camera settings as stored; 10E defaults when absent).
+fn valid_phone_port(port: u64, camera: Option<&Value>) -> bool {
+    let defaults = crate::domain::camera::CameraSettings::default();
+    let read = |key: &str, default: u16| {
+        camera
+            .and_then(|c| c.get(key))
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::from(default))
+    };
+    let control = read("receiver_port", defaults.receiver_port);
+    let start = read("passive_port_start", defaults.passive_port_start);
+    let end = read("passive_port_end", defaults.passive_port_end);
+    (1024..=65535).contains(&port) && port != control && !(start..=end).contains(&port)
+}
+
 fn valid_camera(value: &Value) -> bool {
     if !value.get("auto_take_back").is_none_or(Value::is_boolean) {
         return false;

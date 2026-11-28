@@ -14,7 +14,7 @@ one plain-language narrative per phase and can try the result by hand.
 ## 2. Roles, runners, models
 | Role | How it runs | Model |
 |---|---|---|
-| Orchestrator | this Claude session; starts runs, reads results, answers blocked sessions from the book | Fable |
+| Orchestrator | this Claude session; starts runs, reads results, answers blocked sessions from the book | Opus 5.5 (owner 2026-11-26; was Fable) |
 | Mechanism inventory | `claude -p --agent pipeline-inventory` | Opus 5.5 |
 | Planner | `claude -p --agent pipeline-planner` | Fable |
 | Implementer | `codex exec -m gpt-6-sol`, effort `medium`, or `high` when the plan marks the phase `difficulty: high` (`PSM_IMPLEMENTER=claude` → `claude -p --agent pipeline-implementer --model opus`, used 2026-10-25/26 while Codex was rate-limited; when Sol answers "at capacity" the runner retries with `gpt-5.6-terra`, effort `high`, owner 2026-10-26). **A plan with frontmatter `implementer: fable` runs implement and fix with `claude -p --agent pipeline-implementer --model fable`** (owner 2026-11-04: frontend logic and interactions are written and fixed by Fable) | Codex 6 Sol; Fable for `implementer: fable` phases |
@@ -172,6 +172,12 @@ the work itself; the contracts of 08B are enumerated tables, so the risk of a ba
   Implementation stays on Opus / Codex as §2 says; no plan sets `implementer: fable`.
 
 ## Log
+- **2026-11-26 v1.7 (owner, live preview track).** When Codex is out of usage entirely, the runner continues the
+  implement and fix sessions on Claude Opus by itself (`run_phase.sh` `run_codex`), and `PSM_IMPLEMENTER=claude` now runs
+  fixes on Opus too (was Sonnet; `PSM_CLAUDE_FIX_MODEL` overrides). The owner leaves the build unattended: the orchestrator
+  answers blocked sessions from the book and the plan, and runs LV1→LV3 without waiting between milestones.
+- **2026-11-26 v1.6 (owner).** §2: the orchestrator runs on **Opus 5.5** by default (was Fable). The models of the
+  sessions it launches are unchanged (planner/reviewer Opus, implementer per plan, Fable for `implementer: fable`).
 - **2026-11-15 v1.5 (owner).** §7A: the agent guide `docs/guide/` (written by Fable at the owner's request,
   verified by the orchestrator) and the rule to keep it current; `CLAUDE.md` points to it first.
 - **2026-11-12 v1.5 (P70).** §4A: the behaviour tests are one test program (`--test suite <stem>::`);

@@ -165,6 +165,10 @@ impl<'a> SessionsService<'a> {
         let before = self.store.active_session_id()?;
         self.store.set_active_session_id(id)?;
         if before != id {
+            // CS7: the current shot is forgotten on every switch (10J MC-LV3).
+            if let Some(events) = self.events {
+                events.emit(AppEvent::ActiveSessionChanged { session_id: id });
+            }
             tracing::info!(
                 target: "psm::arrival",
                 "arrival.target session={} folder={} from={}",
@@ -298,7 +302,7 @@ impl<'a> SessionsService<'a> {
                 health.set("capture_folder_not_set", e.to_string());
                 return Err(Error::CaptureFolderNotSet);
             }
-            self.store.set_active_session_id(Some(id))?;
+            self.store_target(Some(id), &item.folder_key)?;
             if let Some(follow) = self.follow {
                 log.step("collection_switched", || follow.collection_switched())?;
             }
@@ -350,7 +354,7 @@ impl<'a> SessionsService<'a> {
                 health.set("capture_folder_not_set", e.to_string());
                 return Err(Error::CaptureFolderNotSet);
             }
-            self.store.set_active_session_id(None)?;
+            self.store_target(None, "_Unassigned")?;
             if let Some(follow) = self.follow {
                 log.step("collection_switched", || follow.collection_switched())?;
             }

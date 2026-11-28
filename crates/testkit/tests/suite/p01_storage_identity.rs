@@ -289,6 +289,9 @@ fn c1a_open_creates_all_domain_columns() {
                 "status",
                 "expected_files",
                 "created_at",
+                // LV2 (`ensure_live_columns`): the exposure's current-shot binding.
+                "shot_bound",
+                "shot_container_id",
             ],
         ),
         (
@@ -491,6 +494,21 @@ fn c1a_open_creates_all_domain_columns() {
                 "key_at",
                 "key_name",
                 "pending_zoom",
+                // LV2 (`ensure_live_columns`): the photo's binding at arrival.
+                "shot_bound",
+                "shot_container_id",
+            ],
+        ),
+        // LV2 (`ensure_live_columns`): one row per paired phone (only the token's hash).
+        (
+            "phone_pairings",
+            &[
+                "id",
+                "name",
+                "token_sha256",
+                "created_at",
+                "last_seen_at",
+                "revoked_at",
             ],
         ),
         (

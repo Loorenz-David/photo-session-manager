@@ -37,5 +37,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [dev-dependencies]
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 kamadak-exif = "0.6"
 rusqlite_migration = "2.6"

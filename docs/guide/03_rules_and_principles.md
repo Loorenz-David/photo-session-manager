@@ -66,8 +66,14 @@ Each rule names its source. When a rule here and the source disagree, the source
   the dictionary, wait, never kill), and only when the preconditions hold. Nothing else quits it.
 - Live view is in scope (book `10J`, ratified 2026-11-26). The app may write only the settings live view needs
   (none on the a7R V) and the focus point from a tap (`AF_Area_Position`); **never exposure mode**, network or FTP.
-  Focus and capture run on their own threads, never on the live-pull loop. A camera session is always ended
+  Focus runs on its worker and capture on the command loop, never on the live-pull loop. A camera session is always ended
   cleanly (quit/disconnect), never cut off: an abrupt stop left the camera's USB session half-open in the lab.
+- The sidecar's one camera-write entry takes only StoreDestination, FocusPoint, HalfPress or
+  ShutterRelease intent. Focus never changes Focus Area; a non-movable area is reported and no
+  write follows. The sidecar reads Focus Area: only Flexible Spot sizes, Expanded Flexible Spot
+  and their tracking variants permit a phone point; Wide, Zone and Center refuse it even if the
+  position property reports writable. An active focus is cancelled on quit; workers join before
+  the SDK disconnects.
 - The automated suite never needs the camera, Capture One, Shopify or the network (flow §6A;
   master plan §3 "Hardware"); the sidecar in tests is `testkit/src/bin/fake_sidecar.rs`.
 - No `implementer: fable` on camera phases (owner).
@@ -106,6 +112,22 @@ Each rule names its source. When a rule here and the source disagree, the source
 | Writer calls are recorded, costed and day-capped like research calls, and exported | HW6, WC7 | `gateway.rs` with `Stage::Write`, `export.rs` |
 | Without a key, network or integration the writer says why and everything else works; an automatic request ("Next to review", "All checked") never shows a toast and never holds up the owner | HW7, WC3, A19 | `writer/run.rs::writer_block`, commands answer `research_unavailable`, `requestTexts` in `features/sessions/reviewQueue.ts` |
 | At most one `write` run queued per session; none while research or a look runs on the session; automatic origins create at most one per session | WC3 | `writer/run.rs::request_decision` |
+
+## Current shot and phone rules (book 10J MC-LV3, 11 §Phone remote; `docs/implementation/master_plan_live.md` §5 CS, PH)
+- Every exposure of a templated session is bound **once**, when the camera reports it, to the shot current then,
+  inside the ledger worker lock and the same store transaction as its row; a later run never re-binds. A file is
+  placed by its binding whenever it arrives (a late Wi-Fi file still goes to its shot).
+- Photos without a binding (shot before LV2, moved or copied in) are never moved by placement; they still count as
+  taken. A hand action never changes a binding. There is no refill after a Deny: Retake or a tap chooses the shot.
+- The current shot lives in memory only; a session switch or a relaunch starts from the default. Untemplated
+  sessions are exactly as P66 (Main, end of the list).
+- A reported shutter's container stays taken until its delivered file has become a photo, or five minutes have
+  elapsed since the shutter. Filing a file alone never makes that container available to the next shutter.
+- Lock order: the store transaction first, then `CurrentShots`' held value — never the other way round.
+- Phone: no request without a live pairing reaches a service; every POST names the active session (else 409
+  `session_changed`, nothing happens); handlers decide nothing (H8). The token is never logged and never stored
+  (only its SHA-256). The phone app uses relative URLs only and no secure-context API (no service worker, no wake
+  lock): it runs over plain HTTP on the LAN (card LV3).
 
 ## Stack and boundaries (`CLAUDE.md`; book `11`; master plan §6.1)
 - Rust is the backend. **No Python in the product** (`11` §Processes: a Python sidecar only for a

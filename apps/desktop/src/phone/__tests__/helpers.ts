@@ -1,0 +1,503 @@
+/**
+ * What every phone test stands on (LV3 plan §Shared): the Mac is a fake at the two transports the
+ * phone uses (`fetch` for PH4, `WebSocket` for PH5), so `api.ts` and `socket.ts` run for real and a
+ * row's outcome is the exact request, the exact demand message, or what shows. Also the browser
+ * pieces jsdom lacks: pointer capture, `matchMedia`, `navigator.vibrate`, Fullscreen,
+ * `createImageBitmap`, the canvas drawer (a spy), and a layout for the stage, viewport and dock.
+ */
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, vi } from 'vitest';
+import type { Hello, PhoneSession, PhoneSessionView } from '../api';
+import { PhoneApp } from '../PhoneApp';
+
+export type SentRequest = { method: string; path: string; authorization: string | null; body: unknown };
+type Answer = { status: number; body: unknown };
+
+/** The Mac's HTTP side: answers `hello` and `session` from its fields, every POST with `{ok: true}` unless told otherwise. */
+export class FakeMac {
+  requests: SentRequest[] = [];
+  hello: Hello = { api: 1, pairing: { id: 1, name: 'Phone 1' }, mac_name: 'Studio-Mac', features: ['live', 'capture', 'focus', 'current_shot', 'move'] };
+  view: PhoneSessionView = { session: null };
+  /** Answers by `"METHOD path"`, e.g. `"POST /api/phone/v1/capture"`; a function sees the request. */
+  answers = new Map<string, Answer | ((request: SentRequest) => Answer)>();
+  /** Requests held back until `release()` (to observe the app while the Mac has not answered). */
+  private held: (() => void)[] | null = null;
+
+  hold(): void {
+    this.held = [];
+  }
+  async release(): Promise<void> {
+    const waiting = this.held ?? [];
+    this.held = null;
+    await act(async () => {
+      waiting.forEach(go => go());
+      await settle();
+    });
+  }
+  answer(key: string, status: number, body: unknown): void {
+    this.answers.set(key, { status, body });
+  }
+  /** The bodies of the POSTs to `path` (the part after `/api/phone/v1`). */
+  posts(path: string): unknown[] {
+    return this.requests.filter(r => r.method === 'POST' && r.path === `/api/phone/v1${path}`).map(r => r.body);
+  }
+  /** Every POST as `[path after /api/phone/v1, body]`, in order. */
+  allPosts(): [string, unknown][] {
+    return this.requests.filter(r => r.method === 'POST').map(r => [r.path.replace('/api/phone/v1', ''), r.body]);
+  }
+  gets(path: string): SentRequest[] {
+    return this.requests.filter(r => r.method === 'GET' && r.path === `/api/phone/v1${path}`);
+  }
+
+  readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const path = String(input);
+    const headers = new Headers(init?.headers);
+    const request: SentRequest = {
+      method,
+      path,
+      authorization: headers.get('Authorization'),
+      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+    };
+    this.requests.push(request);
+    if (this.held) await new Promise<void>(resolve => this.held!.push(resolve));
+    const given = this.answers.get(`${method} ${path}`);
+    const answer: Answer = typeof given === 'function' ? given(request)
+      : given ?? (path.endsWith('/hello') ? { status: 200, body: this.hello }
+        : path.endsWith('/session') ? { status: 200, body: this.view }
+          : { status: 200, body: { ok: true } });
+    return { status: answer.status, ok: answer.status >= 200 && answer.status < 300, json: async () => answer.body } as Response;
+  };
+}
+
+/** One WebSocket the phone opened; the test plays the Mac's end of it. */
+export class FakeSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  static opened: FakeSocket[] = [];
+  readyState = FakeSocket.CONNECTING;
+  binaryType = 'blob';
+  sent: string[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onclose: ((event: { code: number }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  constructor(public url: string) {
+    FakeSocket.opened.push(this);
+  }
+  send(data: string): void {
+    this.sent.push(data);
+  }
+  /** The phone closes its own socket (unmount). */
+  close(): void {
+    this.readyState = FakeSocket.CLOSED;
+  }
+  /** The demand messages the phone sent on this socket, parsed. */
+  demands(): { type: string; gen: number; live: boolean; visible: boolean }[] {
+    return this.sent.map(text => JSON.parse(text)).filter(m => m.type === 'demand');
+  }
+  // --- the Mac's end ---
+  async accept(): Promise<void> {
+    this.readyState = FakeSocket.OPEN;
+    await act(async () => {
+      this.onopen?.();
+      await settle();
+    });
+  }
+  async text(message: unknown): Promise<void> {
+    await act(async () => {
+      this.onmessage?.({ data: JSON.stringify(message) });
+      await settle();
+    });
+  }
+  async binary(bytes: ArrayBuffer): Promise<void> {
+    await act(async () => {
+      this.onmessage?.({ data: bytes });
+      await settle();
+    });
+  }
+  async drop(code = 1006): Promise<void> {
+    this.readyState = FakeSocket.CLOSED;
+    await act(async () => {
+      this.onclose?.({ code });
+      await settle();
+    });
+  }
+}
+
+/** Lets promise chains (fetch → json → state) run to their end without moving the clock. */
+export async function settle(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+}
+
+/** Moves the fake clock by `ms` and lets what it started settle. */
+export async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+    await settle();
+  });
+}
+
+/** A PH5 binary frame message: the 32-byte header, then the JPEG bytes. */
+export function frameBytes(frame: { seq: number; gen: number; width?: number; height?: number; capturedAtMs?: number; jpeg?: number[] }): ArrayBuffer {
+  const jpeg = frame.jpeg ?? [0xff, 0xd8, 1, 2, 3, 0xff, 0xd9];
+  const buffer = new ArrayBuffer(32 + jpeg.length);
+  const view = new DataView(buffer);
+  [0x50, 0x53, 0x4d, 0x46].forEach((byte, i) => view.setUint8(i, byte));
+  view.setUint8(4, 1);
+  view.setBigUint64(8, BigInt(frame.seq), true);
+  view.setUint32(16, frame.gen, true);
+  view.setUint16(20, frame.width ?? 1024, true);
+  view.setUint16(22, frame.height ?? 680, true);
+  view.setBigInt64(24, BigInt(frame.capturedAtMs ?? 1_764_150_000_000), true);
+  new Uint8Array(buffer, 32).set(jpeg);
+  return buffer;
+}
+
+export type PhoneEnv = {
+  mac: FakeMac;
+  /** Every WebSocket the phone opened, in order. */
+  sockets: FakeSocket[];
+  /** The newest socket. */
+  socket: () => FakeSocket;
+  vibrate: ReturnType<typeof vi.fn>;
+  /** The canvas drawer: called once per live frame drawn. */
+  drawImage: ReturnType<typeof vi.fn>;
+  requestFullscreen: ReturnType<typeof vi.fn>;
+  /** `document.visibilityState`, then the `visibilitychange` event. */
+  setVisibility: (state: 'visible' | 'hidden') => Promise<void>;
+};
+
+type EnvOptions = {
+  /** The page's address at start (default `/phone/`). */
+  location?: string;
+  /** A token already kept on the phone. */
+  storedToken?: string;
+  fullscreenEnabled?: boolean;
+  fullscreenElement?: boolean;
+  standalone?: boolean;
+  /** The stage's size in CSS px (default 390 × 610: a 390 × 390 viewport for a 1:1 shot). */
+  stage?: { width: number; height: number };
+  /** The live frame the fake decoder reports (default 1024 × 680). */
+  frame?: { width: number; height: number };
+};
+
+/**
+ * LV10: the reframe editor's stage in the layout stub, 390 × 520 at (0, 0). For a 1:1 rect the frame box is then
+ * left 24, top 89, 342 × 342 (24 px margins), so `342 / 1707` screen px per source px of fixture K.
+ */
+export const REFRAME_STAGE = { left: 0, top: 0, width: 390, height: 520 };
+
+function define(target: object, name: string, value: unknown): void {
+  Object.defineProperty(target, name, { configurable: true, writable: true, value });
+}
+
+/**
+ * Installs the fake Mac and the missing browser pieces, with fake timers. Call first in a test;
+ * everything is undone after it.
+ */
+export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-26T10:00:00Z'));
+  window.localStorage.clear();
+  if (options.storedToken) window.localStorage.setItem('psm.phone.token', options.storedToken);
+  window.history.replaceState(null, '', options.location ?? '/phone/');
+  document.head.querySelectorAll('link[rel="manifest"]').forEach(link => link.remove());
+
+  const mac = new FakeMac();
+  FakeSocket.opened = [];
+  vi.stubGlobal('fetch', mac.fetch);
+  vi.stubGlobal('WebSocket', FakeSocket);
+
+  // Pointer capture (jsdom has none).
+  define(Element.prototype, 'setPointerCapture', () => undefined);
+  define(Element.prototype, 'releasePointerCapture', () => undefined);
+  define(Element.prototype, 'hasPointerCapture', () => false);
+
+  const vibrate = vi.fn(() => true);
+  define(navigator, 'vibrate', vibrate);
+
+  const standalone = options.standalone ?? false;
+  define(window, 'matchMedia', (query: string) => ({
+    matches: query.includes('display-mode: standalone') ? standalone : false,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+
+  const requestFullscreen = vi.fn(async () => undefined);
+  define(document, 'fullscreenEnabled', options.fullscreenEnabled ?? false);
+  define(document, 'fullscreenElement', options.fullscreenElement ? document.documentElement : null);
+  define(document.documentElement, 'requestFullscreen', requestFullscreen);
+
+  let visibility: 'visible' | 'hidden' = 'visible';
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+
+  // The decoder and the canvas drawer.
+  const frame = options.frame ?? { width: 1024, height: 680 };
+  vi.stubGlobal('createImageBitmap', async () => ({ width: frame.width, height: frame.height, close: () => undefined }));
+  const drawImage = vi.fn();
+  define(HTMLCanvasElement.prototype, 'getContext', () => ({ drawImage }));
+
+  // Layout: jsdom measures nothing, so the stage has a size and the viewport and dock tiles get
+  // the rectangles their inline styles and order give them in a browser.
+  const stage = options.stage ?? { width: 390, height: 610 };
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (this.classList.contains('ph-reframe-stage')) return REFRAME_STAGE.width;
+      return this.classList.contains('ph-stage') || this.classList.contains('ph-dock-scroller') ? stage.width : 0;
+    },
+  });
+  // LV8: a strip's scroller is as wide as the stage and its content as wide as its tiles (16 px side
+  // padding, 64 px a tile, 19 px the divider), so an auto-scroll has an end to stop at.
+  Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (!this.classList.contains('ph-dock-scroller')) return 0;
+      const row = Array.from(this.querySelector('.ph-dock-row')?.children ?? []);
+      return Math.max(stage.width, 32 - 8 + row.reduce((width, child) => width + (child.hasAttribute('data-dock-k') ? 64 : 19), 0));
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    configurable: true,
+    get(this: HTMLElement) { return this.classList.contains('ph-reframe-stage') ? REFRAME_STAGE.height : this.classList.contains('ph-stage') ? stage.height : 0; },
+  });
+  define(Element.prototype, 'getBoundingClientRect', function rect(this: HTMLElement) {
+    const box = (left: number, top: number, width: number, height: number) =>
+      ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) });
+    if (this.classList.contains('ph-viewport')) {
+      const width = parseFloat(this.style.width) || 0;
+      const height = parseFloat(this.style.height) || 0;
+      const turned = this.style.transform.includes('rotate(90deg)');
+      const [w, h] = turned ? [height, width] : [width, height];
+      return box((stage.width - w) / 2, (stage.height - h) / 2, w, h);
+    }
+    if (this.classList.contains('ph-reframe-stage')) return box(REFRAME_STAGE.left, REFRAME_STAGE.top, REFRAME_STAGE.width, REFRAME_STAGE.height);
+    if (this.classList.contains('ph-dock-strip') || this.classList.contains('ph-dock-scroller')) return box(0, 700, stage.width, 84);
+    if (this.hasAttribute('data-dock-k')) {
+      // LV-D19: 56 px tiles on a 64 px pitch (8 px gaps), 16 px side padding; the divider takes 11 px more.
+      const scroller = this.closest('.ph-dock-scroller') as HTMLElement | null;
+      let left = 16;
+      for (const sibling of Array.from(this.parentElement?.children ?? [])) {
+        if (sibling === this) break;
+        left += sibling.hasAttribute('data-dock-k') ? 64 : 19;
+      }
+      return box(left - (scroller?.scrollLeft ?? 0), 714, 56, 56);
+    }
+    return box(0, 0, 0, 0);
+  });
+
+  return {
+    mac,
+    sockets: FakeSocket.opened,
+    socket: () => FakeSocket.opened[FakeSocket.opened.length - 1],
+    vibrate,
+    drawImage,
+    requestFullscreen,
+    setVisibility: async state => {
+      visibility = state;
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle();
+      });
+    },
+  };
+}
+
+/** The strips being watched by `stripFrames` in the running test. */
+const watching: MutationObserver[] = [];
+
+afterEach(() => {
+  watching.splice(0).forEach(observer => observer.disconnect());
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+/** What a strip shows right now: each tile's key and the picture it asks for (`-` when it shows none). */
+export function stripFrame(testId: string): string[] {
+  const strip = document.querySelector(`[data-testid="${testId}"]`);
+  return Array.from(strip?.querySelectorAll('[data-dock-k]') ?? []).map(tile => `${tile.getAttribute('data-dock-k')} ${tile.querySelector('img')?.getAttribute('src') ?? '-'}`);
+}
+
+/**
+ * LV9 (plan §Shared, "Strip frames"): watches the strip `testId` from now on and returns a reader of
+ * its frames. A frame is the strip as it stands after one batch of DOM changes (tiles added, removed
+ * or moved; a tile's key or a picture's `src` changed): the tiles' keys in order, each with its
+ * picture's `src` or `-`. The first frame is the strip as it is at the call; equal consecutive
+ * frames are one. A blink (an old arrangement or an old picture shown again) is an extra frame.
+ */
+export function stripFrames(testId: string): () => string[][] {
+  const strip = document.querySelector(`[data-testid="${testId}"]`);
+  if (!strip) throw new Error(`no strip "${testId}"`);
+  const frames: string[][] = [];
+  const record = () => {
+    const frame = stripFrame(testId);
+    if (JSON.stringify(frames[frames.length - 1]) !== JSON.stringify(frame)) frames.push(frame);
+  };
+  record();
+  const observer = new MutationObserver(record);
+  observer.observe(strip, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'data-dock-k'] });
+  watching.push(observer);
+  return () => {
+    // Changes whose report is still queued count too.
+    if (observer.takeRecords().length > 0) record();
+    return frames.map(frame => [...frame]);
+  };
+}
+
+// --- pointers: one finger on a gesture surface, in client coordinates ---
+// jsdom has no PointerEvent: a mouse event of the pointer type carries the coordinates, and the
+// pointer id is added (React reads both from the native event).
+// LV8: `pointerId` names the finger (a second finger has another id).
+function pointer(type: string, target: Element, x: number, y: number, pointerId = 1): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  fireEvent(target, event);
+}
+export function press(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointerdown', target, x, y, pointerId);
+}
+export function slide(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointermove', target, x, y, pointerId);
+}
+export function lift(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointerup', target, x, y, pointerId);
+}
+/** The phone takes the touch away (a call, a system gesture): `pointercancel`. */
+export function cancel(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointercancel', target, x, y, pointerId);
+}
+
+/**
+ * The session of the plan's U3 fixture: shots B (final 02, "Back", filled), A (final 01, "Front",
+ * empty), C (final 03, empty) in shooting order B, A, C, each 1:1; one extra (Main position 04);
+ * one condition image; current = A; item "Oak Lounge Chair", SKU "BEY-123".
+ */
+export const A = 11;
+export const B = 12;
+export const C = 13;
+export const PHOTO_B = 201;
+export const PHOTO_EXTRA = 202;
+export const PHOTO_C1 = 203;
+export function chairSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  const shot = (container_id: number, final_no: number, shoot_no: number, name: string, photo_id: number | null) => ({
+    container_id, final_no, shoot_no, name, ratio: 1, split: false, zoom: 0, example: true,
+    photo: photo_id === null ? null : { photo_id, revision: 1, ratio: 1, preview: 'k0' },
+    incoming: false,
+  });
+  const session: PhoneSession = {
+    id: 7,
+    item: { name: 'Oak Lounge Chair', sku: 'BEY-123', article_number: null },
+    templated: true,
+    current: { kind: 'shot', container_id: A },
+    shots: [shot(B, 2, 1, 'Back', PHOTO_B), shot(A, 1, 2, 'Front', null), shot(C, 3, 3, 'Container 3', null)],
+    extras: [{ photo_id: PHOTO_EXTRA, revision: 1, ratio: 1, preview: 'k0' }],
+    condition: [{ photo_id: PHOTO_C1, revision: 1, ratio: 1, preview: 'k0' }],
+    counts: { main: 2, condition: 1 },
+    incoming: { extras: 0, condition: 0 },
+  };
+  change(session);
+  return session;
+}
+
+/**
+ * LV9 fixture W: the chair session with a photo on its way to shot C (final 03, empty) and two on
+ * their way to the Condition images: the live dock reads "02 01 03 04 · C1", then two waiting tiles.
+ */
+export function waitingSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return chairSession(session => {
+    session.shots[2].incoming = true;
+    session.incoming = { extras: 0, condition: 2 };
+    change(session);
+  });
+}
+
+/** LV8 fixture S: the chair session with a second condition image (the strip reads "02 01 03 04 · C1 C2"). */
+export const PHOTO_C2 = 207;
+export function sortSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return chairSession(session => {
+    session.condition.push({ photo_id: PHOTO_C2, revision: 1, ratio: 1, preview: 'k0' });
+    session.counts.condition = 2;
+    change(session);
+  });
+}
+
+/**
+ * LV10 fixture K (composed): fixture S with the Mac's `default_shape` "1:1" and photo 201 composed —
+ * the default 1:1 framing of its 2560 × 1707 full frame (`1707 / 2560 = 0.6667969` wide, centred);
+ * every other photo has no composition (the camera's own preview).
+ */
+export const K_FRAME = { w: 2560, h: 1707 };
+export const K_VALUES = { kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: { x: 0.1666016, y: 0, w: 0.6667969, h: 1 } };
+/** Fixture K45's framing of 201: shape "4:5", `0.8 · 1707 / 2560 = 0.5334375` wide. */
+export const K45_VALUES = { ...K_VALUES, shape: '4:5', rect: { x: 0.2, y: 0, w: 0.5334375, h: 1 } };
+export function composedSession(change: (session: PhoneSession) => void = () => undefined, values: typeof K_VALUES = K_VALUES): PhoneSession {
+  return sortSession(session => {
+    session.default_shape = '1:1';
+    for (const image of [...session.extras, ...session.condition]) image.composition = null;
+    session.shots[0].photo!.composition = { ...values, rect: { ...values.rect }, frame: { ...K_FRAME }, state: 'ok' };
+    change(session);
+  });
+}
+/** LV10 fixture K45: K with 201 framed 4:5. */
+export const composed45Session = (change: (session: PhoneSession) => void = () => undefined) => composedSession(change, K45_VALUES);
+
+/**
+ * LV8 fixture D: shots in shooting order B (final 02, photo 201), A (01, photo 204), C (03, empty);
+ * extras 202, 205, 206 (Main 04, 05, 06); condition 203, 207, 208 (C1–C3); current = Free shot. Tile
+ * centres x in the stub's layout: B 44 · A 108 · C 172 · 202 236 · 205 300 · 206 364 · Free 428 ·
+ * 203 511 · 207 575 · 208 639; the strip is y 700–784, tile centres y 742.
+ */
+export function dragSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  const image = (photo_id: number) => ({ photo_id, revision: 1, ratio: 1, preview: 'k0' });
+  return chairSession(session => {
+    session.current = { kind: 'free' };
+    session.shots[1].photo = image(204);
+    session.extras = [image(202), image(205), image(206)];
+    session.condition = [image(203), image(207), image(208)];
+    session.counts = { main: 5, condition: 3 };
+    change(session);
+  });
+}
+
+/** LV9 fixture DW: fixture D with one photo on its way to the Condition images; its waiting tile's centre is x 703. */
+export function dragWaitingSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return dragSession(session => {
+    session.incoming = { extras: 0, condition: 1 };
+    change(session);
+  });
+}
+
+/** The token the started phone is paired with. */
+export const TOKEN = 'T';
+
+/** Renders the app without waiting for the Mac (the first requests and the socket are under way). */
+export async function mountPhone(): Promise<void> {
+  await act(async () => {
+    render(createElement(PhoneApp));
+    await settle();
+  });
+}
+
+/**
+ * A paired phone, connected: the Mac answered `hello` and `session` (the given one), the socket is
+ * open and the connecting overlay has left.
+ */
+export async function startPhone(env: PhoneEnv, session: PhoneSession | null = chairSession()): Promise<void> {
+  env.mac.view = { session };
+  window.localStorage.setItem('psm.phone.token', TOKEN);
+  await mountPhone();
+  await env.socket().accept();
+  await advance(400);
+}
+
+/** The Mac changed the session: a `session` message, answered by the phone's re-read. */
+export async function macChanges(env: PhoneEnv, session: PhoneSession | null): Promise<void> {
+  env.mac.view = { session };
+  await env.socket().text({ type: 'session', session_id: session?.id ?? null, rev: env.mac.requests.length + 1 });
+}

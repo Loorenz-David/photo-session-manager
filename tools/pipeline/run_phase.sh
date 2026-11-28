@@ -19,7 +19,8 @@ RUNS="$ROOT/.pipeline/runs"
 TPL="$ROOT/tools/pipeline/templates"
 WRAP="$ROOT/tools/pipeline/wrappers/codex_implementer.md"
 CWRAP="$ROOT/tools/pipeline/wrappers/claude_implementer.md"
-# Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for gpt-6-sol, Sonnet for gpt-6-luna)
+# Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for both, owner 2026-11-26;
+# PSM_CLAUDE_FIX_MODEL overrides the fix model). Codex out of usage → Claude Opus automatically (owner 2026-11-26).
 IMPLEMENTER="${PSM_IMPLEMENTER:-codex}"
 # Per-phase override: plan frontmatter `implementer: fable` runs implement and fix with Claude Fable
 # (owner 2026-11-04: frontend logic and interactions are written and fixed by Fable).
@@ -110,7 +111,9 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
   fi
   set +e
   : > "${logf%.log}.timeline"
-  cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" \
+  # in a linked worktree .git is a file; the index and lock live in the main repo's .git (owner 2026-11-26, LV1 fix)
+  local gitcommon; gitcommon="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$ROOT/.git")"
+  cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" --add-dir "$gitcommon" \
       --add-dir "$HOME/.cargo" --add-dir "$HOME/.npm" \
       -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - 2>&1 \
       | stamp "${logf%.log}.timeline" > "$logf"
@@ -120,6 +123,13 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
   if [[ $rc -ne 0 && "$model" == gpt-6-sol ]] && grep -q 'at capacity' "$logf"; then
     log "gpt-6-sol at capacity → gpt-5.6-terra/high"
     run_codex gpt-5.6-terra high "$prompt" "$last" "$logf"; return $?
+  fi
+  # owner 2026-11-26: when Codex is out of usage entirely, continue on Claude Opus (implement and fix),
+  # and stay on Claude for the rest of this run
+  if [[ $rc -ne 0 ]] && grep -qiE 'usage limit|hit your limit|insufficient_quota|quota exceeded|exceeded your current quota' "$logf"; then
+    log "codex out of usage → claude opus for the rest of this run"
+    IMPLEMENTER=claude; mv "$logf" "${logf%.log}.codex.log"
+    run_impl "$model" "$effort" "$prompt" "$last" "$logf"; return $?
   fi
   return $rc
 }
@@ -163,7 +173,7 @@ run_impl() {  # run_impl CODEX_MODEL EFFORT PROMPT LAST LOG → codex, or claude
   local model="$1" effort="$2" prompt="$3" last="$4" logf="$5" cm
   if [[ "$PHASE_IMPLEMENTER" == fable ]]; then cm=fable
   elif [[ "$IMPLEMENTER" == codex ]]; then run_codex "$@"; return $?
-  else cm=opus; [[ "$model" == gpt-6-luna ]] && cm=sonnet; fi
+  else cm=opus; [[ "$model" == gpt-6-luna ]] && cm="${PSM_CLAUDE_FIX_MODEL:-opus}"; fi  # owner 2026-11-26: fixes on Opus too (was Sonnet)
   local full="$RUNS/$(basename "${prompt%.md}").full.md"
   cat "$CWRAP" "$prompt" > "$full"
   run_claude pipeline-implementer "$cm" "$full" "$last" "$logf" "$effort"
@@ -267,10 +277,12 @@ run_phase() {
   grep -q 'FIX2_AUTHORISED:' "$plan" || stop_for_orchestrator "$phase" "re-review verdict $v (MUST items remain; no FIX2_AUTHORISED in plan)"
   local fp3="$P/implementer/${phase}_fix_r3.md" fh3="$H/implementer/handoff_${phase}_fix_r3.md"
   DRY_HANDOFF="$fh3"
+  if finished "$fh3"; then log "resume: fix r3 already DONE"; else
   render "$TPL/fix.md" "$fp3" PHASE="$phase" ROUND=3 FIXN=2 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh2" IMPL_HANDOFF="$ih" HANDOFF="$fh3"
   commit_artifacts "pipeline: $phase fix 2 prompt"
   run_impl gpt-6-luna high "$fp3" "$RUNS/${phase}_fix_r3.last.md" "$RUNS/${phase}_fix_r3.log" || true
   commit_artifacts "pipeline: $phase fix 2 handoff"
+  fi
   st="$(session_state "$RUNS/${phase}_fix_r3.last.md" "$fh3")"; [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix 2 state $st"
   local rp3="$P/reviewer/${phase}_review_r3.md" rh3="$H/reviewer/handoff_${phase}_review_r3.md"
   DRY_HANDOFF="$rh3"; DRY_VERDICT="${DRY_VERDICT_R3:-APPROVED_WITH_NOTES}"

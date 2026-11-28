@@ -501,7 +501,7 @@ fn c6a_one_history_across_kinds() {
     );
 }
 #[test]
-fn c7a_attribute_events_only_history() {
+fn c7a_attribute_undo_announces_session() {
     let (a, item, s) = attr();
     set(&a, item, K1, "Oak");
     a.history().undo(s).unwrap();
@@ -528,10 +528,47 @@ fn c7a_attribute_events_only_history() {
             (s, None, Some("Edit Color".into()))
         ]
     );
-    assert!(!events.iter().any(|e| matches!(
-        e,
-        AppEvent::PhotoChanged { .. } | AppEvent::SessionChanged { .. }
-    )));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, AppEvent::SessionChanged { session_id } if *session_id == s))
+            .count(),
+        1
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, AppEvent::PhotoChanged { .. }))
+    );
+    drop(events);
+
+    a.events.0.lock().unwrap().clear();
+    a.history().redo(s).unwrap();
+    let events = a.events.0.lock().unwrap();
+    let history: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            AppEvent::HistoryChanged {
+                session_id,
+                undo,
+                redo,
+            } => Some((*session_id, undo.clone(), redo.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(history, vec![(s, Some("Edit Color".into()), None)]);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, AppEvent::SessionChanged { session_id } if *session_id == s))
+            .count(),
+        1
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, AppEvent::PhotoChanged { .. }))
+    );
 }
 #[test]
 fn c8a_copy_redo_missing_source_drops_step() {

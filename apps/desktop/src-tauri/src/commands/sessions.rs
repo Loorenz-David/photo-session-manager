@@ -567,7 +567,7 @@ pub async fn session_activate(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<(), CommandError> {
-    let (store, editing, health, provision, camera, follow, remote) = {
+    let (store, editing, health, provision, camera, follow, remote, events) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
@@ -577,6 +577,7 @@ pub async fn session_activate(
             app.camera.clone(),
             app.follow.clone(),
             app.remote.clone(),
+            app.events.clone(),
         )
     };
     // A10: switches apply in the order they were asked for (the ticket is taken now).
@@ -589,6 +590,7 @@ pub async fn session_activate(
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
                 .with_remote(remote.as_ref())
+                .with_events(events.as_ref())
         };
         // A16: photos are filed to this session from now on, whatever Capture One is doing.
         let claimed =
@@ -607,7 +609,7 @@ pub async fn session_activate(
 #[tauri::command]
 #[specta::specta]
 pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), CommandError> {
-    let (store, editing, health, provision, camera, follow) = {
+    let (store, editing, health, provision, camera, follow, events) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
@@ -616,6 +618,7 @@ pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), Comman
             app.provision.clone(),
             app.camera.clone(),
             app.follow.clone(),
+            app.events.clone(),
         )
     };
     let ticket = CAPTURE_TARGET_ORDER.ticket();
@@ -625,6 +628,7 @@ pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), Comman
                 .with_editing(editing.as_ref(), health.as_ref(), &provision)
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
+                .with_events(events.as_ref())
         };
         // A16: photos are filed to Unassigned from now on, whatever Capture One is doing.
         let claimed = CAPTURE_TARGET_ORDER.claim(ticket, || service().claim_target(None))?;

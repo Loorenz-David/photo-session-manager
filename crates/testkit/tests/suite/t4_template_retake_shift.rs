@@ -120,6 +120,18 @@ fn place(a: &TestApp, id: i64) -> (C, Option<i64>, Option<i64>) {
 fn row(a: &TestApp, id: i64) -> PlaceRow {
     a.store().photo_place_row(id).unwrap().unwrap()
 }
+/// The id of the Chair-3 container with final number `n`.
+fn t_id(a: &TestApp, n: i64) -> i64 {
+    templates(a)
+        .get("Chair")
+        .unwrap()
+        .unwrap()
+        .containers
+        .iter()
+        .find(|c| c.final_no == n)
+        .unwrap()
+        .id
+}
 fn denied(a: &TestApp, id: i64) -> bool {
     a.store().photo_denial(id).unwrap().is_some()
 }
@@ -129,6 +141,7 @@ fn hand(a: &TestApp) -> HandAction<'_> {
         clock: a.clock.as_ref(),
         events: a.events.as_ref(),
         history: a.app.history.as_ref(),
+        shots: a.app.camera_runtime.current_shots(),
     }
 }
 fn drop_on(a: &TestApp, id: i64, n: i64) {
@@ -195,7 +208,12 @@ fn t4_c1a_retake_takes_the_container_and_denies_the_old_photo() {
     assert_eq!(place(&a, f[3].id), (C::Main, Some(3), Some(3)));
     let v = view(&a, s);
     let m = marks(&v, f[3].id);
-    assert_eq!((m.1, m.2), (true, false));
+    // 10J CS8 (was: placed by hand): the dropped photo is placed by the template, bound to K3.
+    assert_eq!((m.1, m.2), (false, false));
+    assert_eq!(
+        row(&a, f[3].id).shot.unwrap().container_id,
+        Some(t_id(&a, 3))
+    );
     let (kind, origin, rect) = comp(&a, f[3].id);
     assert_eq!((kind, origin), (CompositionKind::Split, Origin::User));
     rect_eq(rect.unwrap(), SPLIT_ZOOM_20);
@@ -245,8 +263,10 @@ fn t4_c1c_retake_is_one_undo_step() {
     assert_eq!(full(&a, s), retaken);
 }
 
+/// Rewritten for 10J CS8 (was: the retake carried the old photo's shot key on): the second retake
+/// binds the photo to the container on its place row.
 #[test]
-fn t4_c1d_retake_of_a_retake_carries_the_key_on() {
+fn t4_c1d_retake_of_a_retake_binds_the_container() {
     let a = app();
     let (s, f) = s0(&a, "C1D");
     drop_on(&a, f[3].id, 3);
@@ -254,7 +274,10 @@ fn t4_c1d_retake_of_a_retake_carries_the_key_on() {
     assert_eq!(a.store().photo(f[3].id).unwrap().classification, C::Deleted);
     assert!(row(&a, f[3].id).released);
     assert_eq!(place(&a, f[4].id), (C::Main, Some(3), Some(3)));
-    assert_eq!(row(&a, f[4].id).key_name.as_deref(), Some("DSC00003.ARW"));
+    assert_eq!(
+        row(&a, f[4].id).shot.unwrap().container_id,
+        Some(t_id(&a, 3))
+    );
     let v = view(&a, s);
     assert!(!marks(&v, f[4].id).2);
     assert_eq!(v.differs, 0);
@@ -294,29 +317,33 @@ fn t4_c2a_deny_leaves_the_container_empty() {
     assert!(v.can_shift_back);
 }
 
+/// Rewritten for 10J MC-LV3 (was 10G §6 rule 4's refill, owner 2026-11-16): after a Deny the next
+/// shot follows the current shot (none: every container had its shot) and is Condition; the denied
+/// photo is not released; the shot after it fills the empty container (the current shot moved on
+/// to it).
 #[test]
-fn t4_c2b_arrival_after_a_deny_fills_the_empty_container_and_moves_nothing_else() {
-    // Owner 2026-11-16: the next shot fills the container a deleted photo left empty.
+fn t4_c2b_arrival_after_a_deny_does_not_refill_the_next_one_does() {
     let a = app();
     let (s, f) = chair_with(&a, "C2B", 3);
     a.review().delete(f[1].id).unwrap();
     let f1 = place(&a, f[0].id);
     let f3 = place(&a, f[2].id);
     let f4 = arrive(&a, s, "DSC00004.ARW");
-    assert_eq!(place(&a, f4.id), (C::Main, Some(1), Some(1)));
-    assert!(row(&a, f[1].id).released);
-    assert_eq!(row(&a, f4.id).key_name.as_deref(), Some("DSC00002.ARW"));
+    assert_eq!(place(&a, f4.id), (C::Condition, Some(1), None));
+    assert!(!row(&a, f[1].id).released);
+    let f5 = arrive(&a, s, "DSC00005.ARW");
+    assert_eq!(place(&a, f5.id), (C::Main, Some(1), Some(1)));
     // The other photos keep their containers (Main's positions follow the containers, P7).
     assert_eq!(place(&a, f[0].id).2, f1.2);
     assert_eq!(place(&a, f[2].id).2, f3.2);
     let v = view(&a, s);
     assert_eq!(v.differs, 0);
-    assert!(!v.can_shift_back);
-    assert!(!marks(&v, f4.id).1, "placed by the template, not by hand");
-    let f5 = arrive(&a, s, "DSC00005.ARW");
-    assert_eq!(place(&a, f5.id).0, C::Condition);
+    assert!(!marks(&v, f5.id).1, "placed by the template, not by hand");
 }
 
+/// Rewritten for 10J MC-LV3 (was the refill of several empty containers in shooting order): with
+/// two containers emptied by Deny and no current shot, the next shot is Condition, then the
+/// current shot runs through the empty containers in shooting order.
 #[test]
 fn t4_c2b2_several_empty_containers_fill_in_shooting_order() {
     let a = app();
@@ -326,20 +353,21 @@ fn t4_c2b2_several_empty_containers_fill_in_shooting_order() {
     a.review().delete(f[0].id).unwrap();
     assert_eq!(view(&a, s).next_shot, Some(1));
     let g = arrive_framed(&a, s, 4..=6);
-    assert_eq!(place(&a, g[0].id), (C::Main, Some(2), Some(2)));
-    assert_eq!(place(&a, g[1].id), (C::Main, Some(3), Some(3)));
-    let (kind, _, rect) = comp(&a, g[1].id);
+    assert_eq!(place(&a, g[0].id).0, C::Condition);
+    assert_eq!(place(&a, g[1].id), (C::Main, Some(2), Some(2)));
+    assert_eq!(place(&a, g[2].id), (C::Main, Some(3), Some(3)));
+    let (kind, _, rect) = comp(&a, g[2].id);
     assert_eq!(kind, CompositionKind::Split);
     rect_eq(rect.unwrap(), SPLIT_ZOOM_20);
-    assert_eq!(place(&a, g[2].id).0, C::Condition);
     assert_eq!(place(&a, f[1].id), (C::Main, Some(1), Some(1)));
     assert_eq!(view(&a, s).differs, 0);
 }
 
+/// Rewritten for 10J MC-LV3 (was: the late file kept its own place by shot index): files 1 and 3
+/// arrive, 1 is deleted, then file 2 arrives late with no report: it takes the current shot
+/// (container 3); the next shot takes the container file 1 left empty (container 2).
 #[test]
-fn t4_c2b3_a_late_file_keeps_its_own_place() {
-    // Files 1 and 3 arrive, 1 is deleted, then file 2 arrives late: it is not the latest shot,
-    // so it does not take shot 1's container (that would move file 3).
+fn t4_c2b3_a_late_file_takes_the_current_shot() {
     let a = app();
     chair(&a);
     let s = session(&a, "C2B3", "Chair");
@@ -348,13 +376,12 @@ fn t4_c2b3_a_late_file_keeps_its_own_place() {
     a.review().delete(f1.id).unwrap();
     let f2 = arrive_one(&a, s, 2);
     assert!(!row(&a, f1.id).released);
-    assert_eq!(place(&a, f2.id), (C::Main, Some(1), Some(1)));
-    assert_eq!(place(&a, f3.id).2, Some(3));
+    assert_eq!(place(&a, f2.id).2, Some(3));
+    assert_eq!(place(&a, f3.id).2, Some(1));
     assert_eq!(containers(&view(&a, s), 3)[1], None);
-    // The next shot is the latest: it fills container 2 (shot 1).
     let f4 = arrive_one(&a, s, 4);
     assert_eq!(place(&a, f4.id), (C::Main, Some(2), Some(2)));
-    assert_eq!(place(&a, f3.id).2, Some(3));
+    assert_eq!(place(&a, f3.id).2, Some(1));
 }
 
 #[test]
@@ -608,28 +635,29 @@ fn t4_c4a_the_owners_story() {
     a.history().redo(s2).unwrap();
     assert_eq!(view(&a, s2).differs, 0);
 
-    // A7: Deny the photo in container 4: the container is empty and is next; file 5 fills it
-    // (owner 2026-11-16; before, it went to Condition and needed Shift the rest back).
+    // A7 (rewritten for 10J MC-LV3; the refill of owner 2026-11-16 is gone): Deny the photo in
+    // container 4: the container is empty and is the default "Next"; file 15 follows the current
+    // shot (none: every container had its shot) and is Condition; Shift the rest back would now
+    // move it into container 4.
     a.review().delete(g[3].id).unwrap();
     let v = view(&a, s2);
     assert_eq!(containers(&v, 4)[3], None);
     assert!(!v.can_shift_back);
     assert_eq!(v.next_shot, Some(4));
     let g5 = arrive_one(&a, s2, 15);
+    assert_eq!(a.store().photo(g5.id).unwrap().classification, C::Condition);
     let v = view(&a, s2);
-    assert_eq!(containers(&v, 4)[3], Some(g5.id));
-    assert!(!v.can_shift_back);
+    assert_eq!(containers(&v, 4)[3], None);
+    assert!(v.can_shift_back);
     assert_eq!(v.differs, 0);
 
     // A8: a retake dropped onto container 1: the old photo is deleted (red); no warning.
-    let g6 = arrive_one(&a, s2, 16);
-    assert_eq!(a.store().photo(g6.id).unwrap().classification, C::Condition);
     let old = containers(&view(&a, s2), 4)[0].unwrap();
-    drop_on(&a, g6.id, 1);
+    drop_on(&a, g5.id, 1);
     assert_eq!(a.store().photo(old).unwrap().classification, C::Deleted);
     assert!(denied(&a, old));
     let v = view(&a, s2);
-    assert_eq!(containers(&v, 4)[0], Some(g6.id));
+    assert_eq!(containers(&v, 4)[0], Some(g5.id));
     assert_eq!(v.differs, 0);
 
     // A9: a type without a template behaves as before (P66).
@@ -661,11 +689,13 @@ fn next_shot_follows_the_shooting_order_and_counts_denied_and_reported_shots() {
     );
     let f = arrive_framed(&a, s, 1..=2);
     assert_eq!(view(&a, s).next_shot, Some(3));
-    // A denied photo leaves its container empty: that container is next (owner 2026-11-16).
+    // A denied photo leaves its container empty: that container is the default (owner 2026-11-16).
     a.review().delete(f[1].id).unwrap();
     assert_eq!(view(&a, s).next_shot, Some(2));
+    // 10J MC-LV3 (was "the gap is filled"): the next shot goes to the current shot (container 3);
+    // the emptied container stays next, and the shot after fills it.
     arrive_framed(&a, s, 3..=3);
-    assert_eq!(view(&a, s).next_shot, Some(3), "the gap is filled");
+    assert_eq!(view(&a, s).next_shot, Some(2));
     arrive_framed(&a, s, 4..=4);
     assert_eq!(
         view(&a, s).next_shot,

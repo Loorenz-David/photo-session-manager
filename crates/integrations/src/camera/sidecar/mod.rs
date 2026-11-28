@@ -1,4 +1,5 @@
 pub mod client;
+pub mod frames;
 pub mod protocol;
 pub mod supervisor;
 pub const RESTART_BACKOFF_S: [u64; 5] = [1, 2, 4, 8, 16];

@@ -104,6 +104,18 @@ pub enum StepKind {
 }
 
 impl Step {
+    fn photo_ids(&self) -> Vec<i64> {
+        match &self.kind {
+            StepKind::Classify { photos, .. }
+            | StepKind::Move { photos, .. }
+            | StepKind::KeepPublished { photos, .. } => photos.iter().map(|p| p.photo_id).collect(),
+            StepKind::Reorder { photo_id, .. } => vec![*photo_id],
+            StepKind::Copy { copies, .. } => copies.iter().map(|(_, id)| *id).collect(),
+            StepKind::Composition { photos, .. } => photos.iter().map(|p| p.photo_id).collect(),
+            StepKind::Template { photos, .. } => photos.iter().map(|p| p.photo_id).collect(),
+            StepKind::Attribute { .. } => Vec::new(),
+        }
+    }
     /// Whether undoing or redoing this step would change the photo `photo_id`.
     fn names_photo(&self, photo_id: i64) -> bool {
         match &self.kind {
@@ -213,6 +225,21 @@ pub struct HistoryOutcome {
 }
 
 impl History {
+    /// Announce committed photo and session changes to the desktop and phone bridges.
+    pub(crate) fn announce(&self, photos: &[(i64, i64)], sessions: &[i64]) {
+        for &(photo_id, session_id) in photos {
+            self.events.emit(AppEvent::PhotoChanged {
+                photo_id,
+                session_id,
+            });
+        }
+        let mut sessions = sessions.to_vec();
+        sessions.sort_unstable();
+        sessions.dedup();
+        for session_id in sessions {
+            self.events.emit(AppEvent::SessionChanged { session_id });
+        }
+    }
     pub fn new(events: Arc<dyn EventSink>) -> Self {
         Self::with_store(Arc::new(Mutex::new(HashMap::new())), events)
     }
@@ -506,17 +533,18 @@ impl<'a> HistoryService<'a> {
         if let Some(released) = released {
             self.history.emit_released(released);
         }
-        if !changed_photos.is_empty() {
-            for photo_id in changed_photos {
-                self.history.events.emit(AppEvent::PhotoChanged {
-                    photo_id,
-                    session_id,
-                });
-            }
-            self.history
-                .events
-                .emit(AppEvent::SessionChanged { session_id });
-        }
+        let mut sessions = touched.clone();
+        sessions.sort_unstable();
+        sessions.dedup();
+        let mut photo_ids = step.photo_ids();
+        photo_ids.extend(changed_photos);
+        photo_ids.sort_unstable();
+        photo_ids.dedup();
+        let photos: Vec<_> = photo_ids
+            .into_iter()
+            .filter_map(|id| self.store.photo(id).ok().map(|p| (id, p.session_id)))
+            .collect();
+        self.history.announce(&photos, &sessions);
         Ok(HistoryOutcome {
             label: step.label,
             direction,

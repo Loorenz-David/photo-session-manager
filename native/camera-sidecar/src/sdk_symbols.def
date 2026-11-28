@@ -36,6 +36,14 @@ prop FTP_AutoTransferTarget_StillImage
 prop FTP_PowerSave
 prop RecordingMedia
 prop S1
+prop LiveViewStatus
+prop LiveView_Image_Quality
+prop LiveViewProtocol
+prop FocusMode
+prop FocusArea
+prop AF_Area_Position
+prop FocusIndication
+prop PriorityKeySettings
 
 sym ModelILCE7RM5        SCRSDK::CrCameraDeviceModel_ILCE_7RM5
 sym UsbConnectionFactory &SCRSDK::CreateCameraObjectInfoUSBConnection
@@ -56,6 +64,14 @@ sym ErrSSHServerAuth     SCRSDK::CrError_Connect_SSH_ServerAuthenticationFailed
 sym ErrFailRejected      SCRSDK::CrError_Connect_FailRejected
 sym ErrSessionAlreadyOpened SCRSDK::CrError_Connect_SessionAlreadyOpened
 sym LockIndicatorLocked  SCRSDK::CrLockIndicator_Locked
+sym UnlockIndicator SCRSDK::CrLockIndicator_Unlocked
+sym GetLiveViewImage &SCRSDK::GetLiveViewImage
+sym GetLiveViewImageInfo &SCRSDK::GetLiveViewImageInfo
+sym LvFrameNotUpdated SCRSDK::CrWarning_Frame_NotUpdated
+sym LvFrameNo &SCRSDK::CrImageDataBlock::GetFrameNo
+sym GetSelectLiveViewProperties &SCRSDK::GetSelectLiveViewProperties
+sym LvPropAFAreaPosition SCRSDK::CrLiveViewProperty_AF_Area_Position
+sym FocusFrameInfoType SCRSDK::CrFrameInfoType_FocusFrameInfo
 sym NotifyCapturedEvent  SCRSDK::CrNotify_Captured_Event
 sym WarningExtAFStatus   SCRSDK::CrWarningExt_AFStatus
 sym AFStatusFocused      SCRSDK::CrWarningExt_AFStatusParam_Focused_AF_S

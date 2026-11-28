@@ -4,6 +4,7 @@ pub mod commerce;
 pub mod conversations;
 pub mod editing;
 pub mod labels;
+pub mod phone;
 pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
@@ -298,8 +299,10 @@ impl SettingsSetContext {
         let mut b = next;
         // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
         // C1: so is the conversations slot (read live through its slot port).
+        // LV2 (§4.5): the phone server reads `phone` itself (a port change rebinds it).
         for key in [
             "theme",
+            "phone",
             "output_format",
             "storage",
             "export",
@@ -699,6 +702,9 @@ impl App {
             })
         };
         let events = Arc::new(EventHub::default());
+        events.observe(Arc::new(CurrentShotObserver(
+            camera_runtime.current_shots(),
+        )));
         let history = Arc::new(match history_store {
             Some(store) => History::with_store(store, events.clone()),
             None => History::new(events.clone()),
@@ -779,7 +785,8 @@ impl App {
             camera.clone(),
             events.clone(),
             clock.clone(),
-        );
+        )
+        .with_current_shots(camera_runtime.current_shots());
         // A10: the arrival thread queues Capture One's work for a new photo; the background loop
         // runs it (`DeferredFollow::flush`), so a busy Capture One never holds arrivals up.
         // Without the background loop (`run_startup` off: tests, tools) nothing would flush the
@@ -1544,19 +1551,52 @@ pub fn commerce_from_settings(
 pub struct EventHub {
     state: std::sync::Mutex<EventHubState>,
 }
+/// CS7 (`master_plan_live.md` §5): a session switch forgets the held current shot. The holder
+/// lives with the camera runtime (one per process); each App's hub observes for it.
+struct CurrentShotObserver(Arc<psm_core::services::current_shot::CurrentShots>);
+impl EventSink for CurrentShotObserver {
+    fn emit(&self, event: AppEvent) {
+        if matches!(event, AppEvent::ActiveSessionChanged { .. }) {
+            self.0.clear();
+        }
+    }
+}
 #[derive(Default)]
 struct EventHubState {
     target: Option<Arc<dyn EventSink>>,
     queued: Vec<AppEvent>,
     /// Sinks inside the app that hear every event as it is emitted (R7·U1: research).
     observers: Vec<Arc<dyn EventSink>>,
+    /// Observers that outlive an App (LV3·C28: the phone server): a settings save that rebuilds
+    /// the App hands them to the new App's hub with the target.
+    carried: Vec<Arc<dyn EventSink>>,
+}
+fn same_sink(a: &Arc<dyn EventSink>, b: &Arc<dyn EventSink>) -> bool {
+    std::ptr::addr_eq(Arc::as_ptr(a), Arc::as_ptr(b))
 }
 impl EventHub {
+    /// A rebuild (`apply_settings`): the new App's hub takes this hub's target and its carried
+    /// observers.
     pub fn transfer_target_to(&self, other: &EventHub) {
-        if let Ok(state) = self.state.lock()
-            && let Some(target) = state.target.clone()
-        {
+        let (target, carried) = match self.state.lock() {
+            Ok(state) => (state.target.clone(), state.carried.clone()),
+            Err(_) => return,
+        };
+        for observer in carried {
+            other.observe_carried(observer);
+        }
+        if let Some(target) = target {
             other.set_target(target);
+        }
+    }
+    /// Registers a process-lifetime observer: it hears every event like [`Self::observe`]'s, and
+    /// follows the target to the next App's hub on a rebuild. Registering the same observer
+    /// again does nothing.
+    pub fn observe_carried(&self, observer: Arc<dyn EventSink>) {
+        if let Ok(mut state) = self.state.lock()
+            && !state.carried.iter().any(|o| same_sink(o, &observer))
+        {
+            state.carried.push(observer);
         }
     }
     /// Registers a sink that hears every event when it is emitted (before the target).
@@ -1578,10 +1618,17 @@ impl EventHub {
 }
 impl EventSink for EventHub {
     fn emit(&self, event: AppEvent) {
-        let observers = self
+        let observers: Vec<Arc<dyn EventSink>> = self
             .state
             .lock()
-            .map(|state| state.observers.clone())
+            .map(|state| {
+                state
+                    .observers
+                    .iter()
+                    .chain(state.carried.iter())
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default();
         for observer in observers {
             observer.emit(event.clone());

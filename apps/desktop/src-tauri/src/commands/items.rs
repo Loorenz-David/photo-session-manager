@@ -51,6 +51,11 @@ impl From<Error> for CommandError {
             Error::TemplateExists => "template_exists",
             Error::TemplateImageUnreadable => "template_image_unreadable",
             Error::NoTemplate => "no_template",
+            Error::ShotFilled => "shot_filled",
+            Error::SessionChanged => "session_changed",
+            Error::NotInTemplate => "not_in_template",
+            Error::PairingUnknown => "pairing_unknown",
+            Error::PhonePortInvalid => "phone_port_invalid",
             Error::NothingToShift => "nothing_to_shift",
             Error::NothingToExport => "nothing_to_export",
             Error::DeleteRefused(_) => "delete_refused",
@@ -60,6 +65,7 @@ impl From<Error> for CommandError {
                 "composition_invalid"
             }
             Error::FrameUnknown => "frame_unknown",
+            Error::CompositionChanged => "composition_changed",
             Error::NeedsReview { photos } => {
                 data.insert("photos".into(), photos.join(", "));
                 "needs_review"
@@ -103,6 +109,7 @@ impl From<Error> for CommandError {
             }
             Error::CaptureFolderNotSet => "capture_folder_not_set",
             Error::CameraNotConnected => "camera_not_connected",
+            Error::FocusUnsupported => "focus_unsupported",
             Error::ReconnectOnCableRefused => "reconnect_on_cable_refused",
             Error::SidecarUnavailable => "sidecar_unavailable",
             Error::SupportArchiveInvalid { file } => {

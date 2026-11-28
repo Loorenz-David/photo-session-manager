@@ -43,6 +43,7 @@ pub struct ArrivalService {
     pub camera: std::sync::Arc<dyn CameraProvider>,
     pub events: std::sync::Arc<dyn EventSink>,
     pub clock: std::sync::Arc<dyn Clock>,
+    pub current_shots: std::sync::Arc<crate::services::current_shot::CurrentShots>,
     capture_root_cache: Mutex<Option<PathBuf>>,
     /// 10E R-I28: with the direct camera adapter the capture root comes from the receiver's
     /// formula (`canon(<document>/Capture)`) instead of the editing provider.
@@ -68,12 +69,22 @@ impl ArrivalService {
             camera,
             events,
             clock,
+            current_shots: std::sync::Arc::new(
+                crate::services::current_shot::CurrentShots::default(),
+            ),
             capture_root_cache: Mutex::new(None),
             capture_root_source: None,
             follow: None,
             follow_capture: false,
             pending: Mutex::new(HashMap::new()),
         }
+    }
+    pub fn with_current_shots(
+        mut self,
+        shots: std::sync::Arc<crate::services::current_shot::CurrentShots>,
+    ) -> Self {
+        self.current_shots = shots;
+        self
     }
     /// The capture root is resolved by `source` and never asked of the editing provider.
     pub fn with_capture_root(mut self, source: CaptureRootFn) -> Self {
@@ -361,6 +372,7 @@ impl ArrivalService {
                 self.store.as_ref(),
                 self.clock.as_ref(),
                 self.events.as_ref(),
+                self.current_shots.as_ref(),
                 photo.id,
             ) {
                 tracing::warn!(photo_id = photo.id, %error, "template placement failed; photo kept");

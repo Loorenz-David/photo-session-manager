@@ -13,7 +13,8 @@
 use crate::AppHandles;
 use psm_core::{
     Result,
-    ports::{clock::SystemClock, store::Store},
+    events::AppEvent,
+    ports::{clock::SystemClock, events::EventSink, store::Store},
     services::{
         sessions::{CAPTURE_TARGET_ORDER, SessionsService},
         storage::{DeletePreview, SessionDeleted},
@@ -34,6 +35,9 @@ pub fn delete(app: &AppHandles, session_id: i64) -> Result<SessionDeleted> {
                 .with_editing(app.editing.as_ref(), app.health.as_ref(), &app.provision)
                 .with_camera(app.camera.as_ref())
                 .with_follow(app.follow.as_ref())
+                // LV3·C27: leaving the deleted session is announced (`ActiveSessionChanged`), so
+                // paired phones are told there is no session and the current shot is forgotten.
+                .with_events(app.events.as_ref())
         };
         let ticket = CAPTURE_TARGET_ORDER.ticket();
         let claimed = CAPTURE_TARGET_ORDER.claim(ticket, || service().claim_target(None))?;
@@ -49,7 +53,14 @@ pub fn delete(app: &AppHandles, session_id: i64) -> Result<SessionDeleted> {
     } else {
         "not_needed".to_owned()
     };
+    // When Capture One could not be left, the session is still the stored target here and its
+    // row removal clears it without a word: that switch is announced too.
+    let still_active = app.store.active_session_id()? == Some(session_id);
     let deleted = app.storage.delete_session(session_id, &capture_one)?;
+    if still_active && app.store.active_session_id()?.is_none() {
+        app.events
+            .emit(AppEvent::ActiveSessionChanged { session_id: None });
+    }
     // H2 (M-H5, 10H §9): the item's picture caches on this Mac go with its row; no shop call.
     if let Some(item_id) = item_id
         && app.store.item(item_id).is_err()

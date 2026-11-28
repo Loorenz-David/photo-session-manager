@@ -217,8 +217,11 @@ fn t2_c4a_exposure_hold_keeps_gap() {
         (Some(1), Some(2), Some(3))
     );
 }
+/// Rewritten for 10J MC-LV3 (was 10G §4 rules 1/5 by file counter without a shutter report): a
+/// late file with no shutter report takes the shot current when it arrives (CS6, P2); the photos
+/// already placed stay; the session still changes.
 #[test]
-fn t2_c4b_late_file_replaces_slot_and_emits() {
+fn t2_c4b_late_file_without_report_takes_the_current_shot_and_emits() {
     let a = app();
     chair(&a);
     let s = session(&a, "C4B", "Chair");
@@ -227,10 +230,13 @@ fn t2_c4b_late_file_replaces_slot_and_emits() {
     assert_eq!(place(&a, f3.id).2, Some(1));
     a.events.0.lock().unwrap().clear();
     let f2 = arrive(&a, s, "DSC00002.ARW");
-    assert_eq!(place(&a, f2.id).2, Some(1));
-    assert_eq!(place(&a, f3.id).2, Some(3));
+    assert_eq!(place(&a, f2.id).2, Some(3));
+    assert_eq!(place(&a, f3.id).2, Some(1));
     let ev = a.events.0.lock().unwrap();
-    assert!(ev.iter().any(|e|matches!(e,AppEvent::PhotoChanged{photo_id,session_id} if *photo_id==f3.id && *session_id==s)));
+    assert!(
+        !ev.iter()
+            .any(|e| matches!(e,AppEvent::PhotoChanged{photo_id,..} if *photo_id==f3.id))
+    );
     assert!(
         ev.iter()
             .any(|e| matches!(e,AppEvent::SessionChanged{session_id} if *session_id==s))
@@ -248,9 +254,18 @@ fn t2_c4c_expired_hold_closes_gap() {
     let f3 = arrive(&a, s, "DSC00003.ARW");
     assert_eq!(place(&a, f3.id).2, Some(3));
     a.clock.advance(FIFO_WINDOW_MS + 1000);
+    // 10J MC-LV3: the three shutters were bound (B, A, C), so the current shot is none; the hold
+    // on C expires, file 3 takes the second slot (A), and file 4, with no report, is Condition.
     let f4 = arrive(&a, s, "DSC00004.ARW");
     assert_eq!(place(&a, f3.id).2, Some(1));
-    assert_eq!(place(&a, f4.id).2, Some(3));
+    assert_eq!(place(&a, f4.id).0, C::Condition);
+    assert!(
+        !session_view(a.store(), s)
+            .unwrap()
+            .photos
+            .iter()
+            .any(|p| p.slot == Some(3))
+    );
 }
 #[test]
 fn t2_c4d_existing_photo_counts_but_stays() {
@@ -260,8 +275,10 @@ fn t2_c4d_existing_photo_counts_but_stays() {
     let t = templates(&a).create("Stool").unwrap();
     let t = templates(&a).container_add(t.id, None).unwrap();
     templates(&a).container_add(t.id, None).unwrap();
+    // 10J MC-LV3 (was: g1 counted as shot 1): g1 is unbound and in no container, so the
+    // current shot is the first container; g1 stays where it was, after the containers.
     let g2 = arrive(&a, s, "DSC00002.ARW");
-    assert_eq!(place(&a, g2.id), (C::Main, Some(1), Some(2), false));
+    assert_eq!(place(&a, g2.id), (C::Main, Some(1), Some(1), false));
     assert_eq!(place(&a, g1.id), (C::Main, Some(2), None, false));
     assert!(a.store().photo_place_row(g1.id).unwrap().is_none());
 }
@@ -297,9 +314,11 @@ fn t2_c4e_tether_uses_file_time() {
     assert_eq!(place(&a, bp.id).2, Some(2));
     a.app.arrival.watcher_event(&first).unwrap();
     a.tick(1000).unwrap();
+    // 10J MC-LV3 (was: the earlier file time took container 2): each tether file takes the shot
+    // current when it arrives; the earlier file time moves nothing.
     let ap = photo(&a, s, "a.ARW");
-    assert_eq!(place(&a, ap.id).2, Some(2));
-    assert_eq!(place(&a, bp.id).2, Some(1));
+    assert_eq!(place(&a, ap.id).2, Some(1));
+    assert_eq!(place(&a, bp.id).2, Some(2));
 }
 #[test]
 fn t2_c5a_preset_materialises_on_first_frame() {
@@ -331,8 +350,11 @@ fn t2_c5a_preset_materialises_on_first_frame() {
         (CompositionKind::Normal, Origin::Default)
     );
 }
+/// Rewritten for 10J MC-LV3 (was 10G §4 rule 5: the late file moved the framed photo into the
+/// preset container): the framed photo stays in its container with its composition; the late file
+/// takes the current (preset) container and gets the presets on its frame.
 #[test]
-fn t2_c5b_late_preset_refits_known_frame() {
+fn t2_c5b_late_file_gets_the_current_containers_preset() {
     let a = app();
     chair(&a);
     let s = session(&a, "C5B", "Chair");
@@ -342,9 +364,14 @@ fn t2_c5b_late_preset_refits_known_frame() {
     frame(&a, &f3);
     let f2 = arrive(&a, s, "DSC00002.ARW");
     frame(&a, &f2);
-    let c = a.composition(f3.id).unwrap();
+    let kept = a.composition(f3.id).unwrap();
     assert_eq!(
-        (place(&a, f3.id).2, c.kind, c.origin),
+        (place(&a, f3.id).2, kept.kind, kept.origin),
+        (Some(1), CompositionKind::Normal, Origin::Default)
+    );
+    let c = a.composition(f2.id).unwrap();
+    assert_eq!(
+        (place(&a, f2.id).2, c.kind, c.origin),
         (Some(3), CompositionKind::Split, Origin::User)
     );
     rect_eq(
@@ -357,17 +384,22 @@ fn t2_c5b_late_preset_refits_known_frame() {
         },
     );
 }
+/// Rewritten for 10J MC-LV3 (was 10G §4 rule 5: a late file pushed the preset photo to
+/// Condition): a photo becomes Condition when its container leaves the template (CS3), and its
+/// preset composition is removed.
 #[test]
 fn t2_c5c_preset_removed_when_photo_becomes_condition() {
     let a = app();
-    chair(&a);
+    let t = chair(&a);
     let s = session(&a, "C5C", "Chair");
     arrive(&a, s, "DSC00001.ARW");
     arrive(&a, s, "DSC00002.ARW");
     let f4 = arrive(&a, s, "DSC00004.ARW");
     frame(&a, &f4);
-    let f3 = arrive(&a, s, "DSC00003.ARW");
-    assert_eq!(place(&a, f3.id).2, Some(3));
+    assert_eq!(place(&a, f4.id).2, Some(3));
+    assert_eq!(a.composition(f4.id).unwrap().kind, CompositionKind::Split);
+    templates(&a).container_remove(t.containers[2].id).unwrap();
+    arrive(&a, s, "DSC00005.ARW");
     assert_eq!(place(&a, f4.id).0, C::Condition);
     let c = a.composition(f4.id).unwrap();
     assert_eq!(
@@ -448,9 +480,11 @@ fn t2_c7b_manual_condition_stays() {
     a.review().classify(f1.id, C::Condition).unwrap();
     arrive(&a, s, "DSC00003.ARW");
     let f2 = arrive(&a, s, "DSC00002.ARW");
+    // 10J MC-LV3: f1 keeps its shot (container 2, now empty by hand); file 3 took the next current
+    // shot (container 1), the late file 2 the one after (container 3).
     assert_eq!(place(&a, f1.id).0, C::Condition);
-    assert_eq!(place(&a, f2.id).2, Some(1));
-    assert_eq!(place(&a, photo(&a, s, "DSC00003.ARW").id).2, Some(3));
+    assert_eq!(place(&a, f2.id).2, Some(3));
+    assert_eq!(place(&a, photo(&a, s, "DSC00003.ARW").id).2, Some(1));
 }
 #[test]
 fn t2_c7c_move_loses_place_row() {
@@ -463,8 +497,10 @@ fn t2_c7c_move_loses_place_row() {
     let s2 = session(&a, "C7C2", "Chair");
     a.review().move_photos(&[f1.id], s2).unwrap();
     assert!(a.store().photo_place_row(f1.id).unwrap().is_none());
+    // 10J MC-LV3 (was: the moved photo counted as shot 1): the moved photo is unbound in its new
+    // session, so the first arrival there takes the first container in shooting order (2).
     let g = arrive(&a, s2, "DSC00011.ARW");
-    assert_eq!(place(&a, g.id), (C::Main, Some(1), Some(1), false));
+    assert_eq!(place(&a, g.id), (C::Main, Some(1), Some(2), false));
     assert_eq!(place(&a, f1.id), (C::Main, Some(2), None, false));
 }
 #[test]
@@ -489,8 +525,10 @@ fn t2_c7d_compose_edit_survives_late_arrival() {
         h: 0.8,
     };
     let given = a.app.compositions.set(f3.id, values.clone()).unwrap();
-    arrive(&a, s, "DSC00002.ARW");
-    assert_eq!(place(&a, f3.id).2, Some(3));
+    // 10J MC-LV3: the late file goes to the current shot (container 3); file 3 stays in 1.
+    let f2 = arrive(&a, s, "DSC00002.ARW");
+    assert_eq!(place(&a, f2.id).2, Some(3));
+    assert_eq!(place(&a, f3.id).2, Some(1));
     assert_eq!(a.composition(f3.id).unwrap(), given);
     assert!(
         a.store()

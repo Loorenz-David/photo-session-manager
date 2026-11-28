@@ -3,6 +3,7 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::{self, BufRead, Write},
+    os::unix::net::UnixStream,
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, RecvTimeoutError},
     thread,
@@ -31,6 +32,7 @@ struct Input {
     ignore_quit: bool,
     capture_id: String,
     cmd_id: String,
+    focus_cmd_id: String,
     /// Lines taken and not yet matched by an `await` (a command may arrive before its `await`).
     unmatched: Vec<String>,
 }
@@ -39,14 +41,24 @@ impl Input {
         append(&self.rec.join("stdin.log"), &format!("{} {line}", self.pid));
         self.unmatched.push(line.clone());
         let mut words = line.split_whitespace();
-        if words.next() == Some("capture") {
-            for word in words {
-                if let Some(v) = word.strip_prefix("id=") {
-                    self.capture_id = v.to_owned();
-                } else if let Some(v) = word.strip_prefix("cmd_id=") {
-                    self.cmd_id = v.to_owned();
+        match words.next() {
+            Some("capture") => {
+                for word in words {
+                    if let Some(v) = word.strip_prefix("id=") {
+                        self.capture_id = v.to_owned();
+                    } else if let Some(v) = word.strip_prefix("cmd_id=") {
+                        self.cmd_id = v.to_owned();
+                    }
                 }
             }
+            Some("focus") => {
+                for word in words {
+                    if let Some(v) = word.strip_prefix("cmd_id=") {
+                        self.focus_cmd_id = v.to_owned();
+                    }
+                }
+            }
+            _ => {}
         }
         if line == "quit" && !self.ignore_quit {
             exit(&self.rec, self.pid, 0);
@@ -105,11 +117,76 @@ impl Inject {
             .collect()
     }
 }
-fn run_injected(line: &str, input: &Input) {
+struct Frames {
+    path: Option<PathBuf>,
+    stream: Option<UnixStream>,
+}
+impl Frames {
+    fn new() -> Self {
+        let args: Vec<String> = env::args().collect();
+        let path = args
+            .windows(2)
+            .find(|w| w[0] == "--frame-socket")
+            .map(|w| PathBuf::from(&w[1]));
+        let stream = path
+            .as_ref()
+            .and_then(|path| UnixStream::connect(path).ok());
+        Self { path, stream }
+    }
+    fn send(&mut self, epoch: u32, number: u32, w: u16, h: u16, len: usize, bad: bool) {
+        if self.stream.is_none() {
+            self.stream = self.path.as_ref().and_then(|p| UnixStream::connect(p).ok());
+        }
+        let Some(stream) = self.stream.as_mut() else {
+            return;
+        };
+        let mut record = Vec::with_capacity(24 + len);
+        record.extend_from_slice(if bad { b"BAD!" } else { b"PSLV" });
+        record.extend_from_slice(&[1, 1, 0, 0]);
+        record.extend_from_slice(&epoch.to_le_bytes());
+        record.extend_from_slice(&number.to_le_bytes());
+        record.extend_from_slice(&w.to_le_bytes());
+        record.extend_from_slice(&h.to_le_bytes());
+        record.extend_from_slice(&(len as u32).to_le_bytes());
+        for i in 0..len {
+            record.push(((epoch as usize + number as usize + i) % 251) as u8);
+        }
+        if stream.write_all(&record).is_err() {
+            self.stream = None;
+        }
+    }
+}
+fn run_injected(line: &str, input: &Input, frames: &mut Frames) {
     let line = line.trim();
     if line.starts_with('{') {
-        println!("{line}");
+        println!(
+            "{}",
+            line.replace("{focus_cmd_id}", &input.focus_cmd_id)
+                .replace("{capture_id}", &input.capture_id)
+                .replace("{cmd_id}", &input.cmd_id)
+        );
         io::stdout().flush().unwrap();
+    } else if let Some(rest) = line.strip_prefix("frame ") {
+        let n: Vec<u32> = rest
+            .split_whitespace()
+            .filter_map(|v| v.parse().ok())
+            .collect();
+        if n.len() == 5 {
+            frames.send(n[0], n[1], n[2] as u16, n[3] as u16, n[4] as usize, false);
+        }
+    } else if let Some(rest) = line.strip_prefix("frames ") {
+        let n: Vec<u32> = rest
+            .split_whitespace()
+            .filter_map(|v| v.parse().ok())
+            .collect();
+        if n.len() == 4 {
+            for i in 0..n[2] {
+                frames.send(n[0], n[1] + i, 640, 424, 32, false);
+                thread::sleep(Duration::from_millis(n[3] as u64));
+            }
+        }
+    } else if line == "badframe" {
+        frames.send(1, 1, 640, 424, 8, true);
     } else if let Some(code) = line.strip_prefix("exit ") {
         exit(&input.rec, input.pid, code.trim().parse().unwrap_or(0));
     }
@@ -117,7 +194,7 @@ fn run_injected(line: &str, input: &Input) {
 
 /// Script mode (P45 §The fake sidecar): one directive per line — a JSON object printed as is
 /// after substitution, `sleep <ms>`, `await <cmd>`, `exit <code>`, `stderr <text>`.
-fn run_script(text: &str, input: &mut Input) {
+fn run_script(text: &str, input: &mut Input, frames: &mut Frames) {
     for raw in text.lines() {
         let line = raw.trim();
         if line.is_empty() {
@@ -127,7 +204,8 @@ fn run_script(text: &str, input: &mut Input) {
         if line.starts_with('{') {
             let out = line
                 .replace("{capture_id}", &input.capture_id)
-                .replace("{cmd_id}", &input.cmd_id);
+                .replace("{cmd_id}", &input.cmd_id)
+                .replace("{focus_cmd_id}", &input.focus_cmd_id);
             println!("{out}");
             io::stdout().flush().unwrap();
         } else if let Some(ms) = line.strip_prefix("sleep ") {
@@ -153,6 +231,8 @@ fn run_script(text: &str, input: &mut Input) {
             exit(&input.rec, input.pid, code.trim().parse().unwrap_or(0));
         } else if let Some(text) = line.strip_prefix("stderr ") {
             eprintln!("{text}");
+        } else if line.starts_with("frame ") || line.starts_with("frames ") || line == "badframe" {
+            run_injected(line, input, frames);
         }
     }
 }
@@ -222,11 +302,13 @@ fn main() {
             .unwrap_or(false),
         capture_id: String::new(),
         cmd_id: String::new(),
+        focus_cmd_id: String::new(),
         unmatched: Vec::new(),
     };
     let scripted = script.is_some();
+    let mut frames = Frames::new();
     if let Some(text) = script {
-        run_script(&text, &mut input);
+        run_script(&text, &mut input, &mut frames);
     }
     // After the script (or without one): P42 behaviour — record stdin, exit on `quit`, optional
     // timed exit.
@@ -244,7 +326,7 @@ fn main() {
         };
         if scripted {
             for line in inject.take() {
-                run_injected(&line, &input);
+                run_injected(&line, &input, &mut frames);
             }
         }
         match input.next(wake) {

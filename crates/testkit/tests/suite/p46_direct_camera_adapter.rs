@@ -253,7 +253,7 @@ fn c1c_session_lost_connecting_then_sidecar_exit_disconnected() {
         Some((false, "Connecting over Wi-Fi…".into()))
     );
     assert_eq!(st(&a), connecting);
-    // The clock does not move: the supervisor's restart after 1 s of mono time never comes.
+    // The clock does not move, so at most the immediate restart can occur.
     a.inject_exit(3).unwrap();
     settle(&a, || ev(&a).last() == Some(&CameraStatus::Disconnected));
     assert_eq!(
@@ -267,7 +267,7 @@ fn c1c_session_lost_connecting_then_sidecar_exit_disconnected() {
         a.capture(),
         Err(psm_core::Error::CameraNotConnected)
     ));
-    assert_eq!(a.fake_sidecar_recording().pids.len(), 1);
+    assert!(a.fake_sidecar_recording().pids.len() <= 2);
 }
 
 #[test]

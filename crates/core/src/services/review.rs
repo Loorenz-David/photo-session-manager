@@ -105,6 +105,8 @@ impl<'a> ReviewService<'a> {
         })?;
         if let Some(step) = step {
             self.history.record(session_id, step);
+            self.history
+                .announce(&[(photo_id, session_id)], &[session_id]);
         }
         self.result(&[session_id], None)
     }
@@ -153,6 +155,8 @@ impl<'a> ReviewService<'a> {
         })?;
         if let Some(step) = step {
             self.history.record(session_id, step);
+            self.history
+                .announce(&[(photo_id, session_id)], &[session_id]);
         }
         self.result(&[session_id], None)
     }
@@ -199,8 +203,19 @@ impl<'a> ReviewService<'a> {
         })?;
         if let Some(step) = step {
             self.history.record(session_id, step);
+            self.history
+                .announce(&[(photo_id, session_id)], &[session_id]);
         }
         self.result(&[session_id], None)
+    }
+
+    /// Compatibility entry for the phone route; `delete` now announces to every surface.
+    pub fn delete_announced(
+        &self,
+        _events: &dyn crate::ports::events::EventSink,
+        photo_id: i64,
+    ) -> Result<ReviewResult> {
+        self.delete(photo_id)
     }
 
     /// "Keep as published" (owner correction A10, 2026-11-18): a published session that changed
@@ -270,7 +285,15 @@ impl<'a> ReviewService<'a> {
             Ok(())
         })?;
         if let Some(step) = step {
+            let photos = match &step.kind {
+                StepKind::KeepPublished { photos, .. } => photos
+                    .iter()
+                    .map(|p| (p.photo_id, session_id))
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            };
             self.history.record(session_id, step);
+            self.history.announce(&photos, &[session_id]);
         }
         self.result(&[session_id], None)
     }
@@ -295,10 +318,12 @@ impl<'a> ReviewService<'a> {
         let mut seq_after = 0;
         let mut target_name = String::new();
         let mut moved_files: Vec<(i64, String, String)> = Vec::new();
+        let mut changed_photos = Vec::new();
         let mut target_folder = String::new();
         let at = self.clock.now_ms();
         self.store.transaction(&mut |tx| {
             moved_files.clear();
+            changed_photos.clear();
             let target_session = tx.session(target)?;
             target_folder = match target_session.item_id {
                 Some(item_id) => tx.item(item_id)?.folder_key,
@@ -364,12 +389,14 @@ impl<'a> ReviewService<'a> {
                 };
                 if copy {
                     let id = tx.copy_photo(photo, target, next)?;
+                    changed_photos.push((id, target));
                     copies
                         .entry(photo.session_id)
                         .or_default()
                         .push((photo.id, id));
                 } else {
                     tx.set_photo_review(photo.id, target, photo.classification, next)?;
+                    changed_photos.push((photo.id, target));
                     tx.photo_place_delete(photo.id)?;
                     touched.insert(photo.session_id);
                     steps.entry(photo.session_id).or_default().push(PhotoPlace {
@@ -438,7 +465,11 @@ impl<'a> ReviewService<'a> {
                 );
             }
         }
-        self.result(&touched.into_iter().collect::<Vec<_>>(), None)
+        let touched: Vec<_> = touched.into_iter().collect();
+        if !touched.is_empty() {
+            self.history.announce(&changed_photos, &touched);
+        }
+        self.result(&touched, None)
     }
 }
 

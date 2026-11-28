@@ -58,14 +58,18 @@ enable_testing()
 add_executable(camera_sidecar_tests tests/test_transport_manager.cpp tests/test_fingerprint_policy.cpp src/sdk_adapter.cpp src/sdk_stub.cpp)
 target_link_libraries(camera_sidecar_tests PRIVATE crlab_core crlab_usb)
 add_test(NAME transport_manager COMMAND camera_sidecar_tests)
+add_executable(camera_liveview_tests tests/test_liveview.cpp)
+target_link_libraries(camera_liveview_tests PRIVATE crlab_core)
+add_test(NAME liveview COMMAND camera_liveview_tests)
 
 set(CRLAB_SDK_SOURCES
   src/camera_discovery.cpp
   src/camera_connection.cpp
   src/camera_properties.cpp
   src/camera_capture.cpp
+  src/live_view.cpp
 )
-set(CRLAB_CLI_SOURCES src/main.cpp src/sdk_adapter.cpp)
+set(CRLAB_CLI_SOURCES src/main.cpp src/sdk_adapter.cpp src/live_runner.cpp)
 
 if(NOT CAMERA_SIDECAR_WITH_SDK)
   message(STATUS "camera-sidecar: stub backend (no camera access). Pass -DCAMERA_SIDECAR_WITH_SDK=ON -DCRSDK_ROOT=<dir> for the SDK build.")

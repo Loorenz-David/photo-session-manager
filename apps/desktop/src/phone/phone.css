@@ -1,0 +1,1338 @@
+/*
+ * Shoot Companion — the phone app's own look (design handoff "Shoot Companion", high fidelity).
+ * The design tokens are the variables below; values that change with state are inline styles.
+ */
+:root {
+  --ph-ink: #111111;
+  --ph-white: #ffffff;
+  --ph-secondary: #555555;
+  --ph-hairline: #ececea;
+  --ph-chip-border: #e2e2e0;
+  --ph-fill: #f1f1ef;
+  --ph-handle: #dededb;
+  --ph-divider: #cfcfcc;
+  --ph-track: #ededeb;
+  --ph-scrim: rgba(0, 0, 0, 0.4);
+  --ph-on-image: rgba(17, 17, 17, 0.6);
+  --ph-on-image-strong: rgba(17, 17, 17, 0.82);
+  --ph-live-dot: oklch(0.62 0.2 27);
+  --ph-ui: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --ph-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --ph-sheet: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--ph-white);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+.ph-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ph-mono {
+  font-family: var(--ph-mono);
+}
+
+/* Pairing screens (no token, removed phone). */
+.ph-pairing {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  box-sizing: border-box;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 17px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* 1. Connecting overlay */
+.ph-connecting {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--ph-white);
+  transition: opacity 0.4s;
+}
+.ph-connecting-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ph-connecting-line {
+  min-height: 14px;
+  font-size: 11px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.06em;
+}
+.ph-loader {
+  width: 160px;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--ph-track);
+}
+.ph-loader-bar {
+  width: 40%;
+  height: 100%;
+  background: var(--ph-ink);
+  animation: ph-load 1s ease-in-out infinite;
+}
+@keyframes ph-load {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+/* Global layout: safe-area spacer · stage · dock · control bar */
+.ph-safe-top {
+  flex: none;
+  height: env(safe-area-inset-top, 0px);
+}
+.ph-fullscreen-row {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+.ph-fullscreen {
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ph-ink);
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ph-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ph-white);
+}
+
+/* 2. The image viewport and its layers */
+.ph-viewport {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  background: var(--ph-ink);
+  touch-action: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.35s ease;
+}
+.ph-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ph-live,
+.ph-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.ph-live {
+  transition: opacity 0.14s ease-out;
+}
+.ph-template-layer {
+  transition: opacity 0.14s ease-out;
+}
+.ph-grey {
+  filter: grayscale(1);
+}
+/* A photo that is on its way, whose preview is not ready, or that did not load: a grey fill instead of a broken
+   image (PH6a). The grey is the chip border's, a step darker than --ph-fill, so the cue's light has room to show. */
+.ph-photo-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: var(--ph-chip-border);
+  color: var(--ph-secondary);
+  font-size: 13px;
+  pointer-events: none;
+  /* The loading cue (LV7, owner R2): the band below is clipped to the tile and stays under the placeholder's text. */
+  overflow: hidden;
+  isolation: isolate;
+}
+/* A quiet band of light crossing the grey, slowly: the photo is on its way, nothing to wait for. Its peak is white
+   at 80 % over the grey (#e2e2e0 → #f9f9f9), about 10 % lighter (LV-D21 (1), plan point P3; LV7's was about 5 %).
+   Parked out of sight (left of the tile) when it does not move. */
+.ph-photo-wait::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, var(--ph-white) 50%, transparent 80%);
+  opacity: 0.8;
+  transform: translateX(-100%);
+  animation: ph-photo-sweep 1.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes ph-photo-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+/* A picture that failed every retry is not on its way: plain grey, nothing moves (plan point P3). */
+.ph-photo-wait[data-gave-up]::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-photo-wait::before {
+    animation: none;
+  }
+}
+/* LV-D21 (5): the Preview's zoom layer. Its transform (inline) is about the viewport's centre; it follows the
+   fingers at once and eases only when it settles (a release past the limits, a double tap). */
+.ph-zoom {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  pointer-events: none;
+}
+.ph-zoom[data-settling] {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-zoom[data-settling] {
+    transition: none;
+  }
+}
+/* LV-D21 (6), 10D §The result is shown: a photo drawn as composed. `.ph-composed` is the box the picture is given
+   (the Preview's viewport, a strip tile); `.ph-composed-box` has the composition's ratio and covers it, centred;
+   `.ph-composed-frame` is the whole turned frame, placed (inline, the Mac's `composedLayout`) so that the framed part
+   fills that box, and turned by the straighten angle; the picture inside it is the Mac's full-frame preview. */
+.ph-composed {
+  overflow: hidden;
+  container-type: size;
+  object-fit: unset;
+}
+.ph-composed-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100cqw, calc(100cqh * var(--ph-composed-ratio)));
+  height: max(100cqh, calc(100cqw / var(--ph-composed-ratio)));
+  translate: -50% -50%;
+}
+.ph-composed-frame {
+  position: absolute;
+  transform-origin: center;
+  container-type: size;
+}
+.ph-composed-frame img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  translate: -50% -50%;
+  object-fit: fill;
+  pointer-events: none;
+}
+/* A quarter turn: the picture's own sides are the frame's, swapped. */
+.ph-composed-frame img[data-swapped] {
+  width: 100cqh;
+  height: 100cqw;
+}
+/* A split's middle (10D: a light line with a dark edge, visible on any photo). */
+.ph-composed-split {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ph-white);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.ph-image-label {
+  position: absolute;
+  bottom: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--ph-on-image);
+  color: var(--ph-white);
+  font-family: var(--ph-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.ph-hint-row {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 40px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.ph-hint {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ph-on-image-strong);
+  color: var(--ph-white);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+.ph-image-label-left {
+  left: 14px;
+}
+.ph-image-label-right {
+  right: 14px;
+}
+
+/* Split guide (LV-D16: Left / Right) */
+.ph-split-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  margin-left: -1px;
+  border-left: 2px dashed var(--ph-white);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+.ph-split-pill {
+  position: absolute;
+  top: 56px;
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Focus reticle */
+.ph-reticle {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ph-white);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: left 0.15s, top 0.15s;
+  animation: ph-reticle-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.ph-reticle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ph-white);
+}
+@keyframes ph-reticle-in {
+  from { transform: scale(1.45); }
+  to { transform: scale(1); }
+}
+
+/* Mode pill and AF chip */
+.ph-top-row {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.ph-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: background 0.14s, color 0.14s;
+  white-space: nowrap;
+}
+.ph-pill-dark {
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+.ph-af-chip {
+  gap: 8px;
+  padding: 7px 8px 7px 11px;
+  pointer-events: auto;
+}
+.ph-af-clear {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ph-ink);
+  color: var(--ph-white);
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Overlay bar */
+.ph-overlay-bar {
+  position: absolute;
+  width: 180px;
+  margin-left: -90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.ph-overlay-pill {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.ph-overlay-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(17, 17, 17, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.ph-overlay-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ph-white);
+}
+
+/* Lock control */
+.ph-lock {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.ph-lock-track {
+  position: absolute;
+  left: -3px;
+  width: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(17, 17, 17, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+.ph-lock-fill {
+  width: 100%;
+  background: var(--ph-white);
+}
+.ph-lock-ring {
+  position: absolute;
+  left: -22px;
+  width: 44px;
+  height: 44px;
+  box-sizing: border-box;
+  border: 2px solid var(--ph-white);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.ph-lock-circle {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 17, 17, 0.7);
+  color: var(--ph-white);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, color 0.15s;
+}
+.ph-lock-closed {
+  background: var(--ph-white);
+  color: var(--ph-ink);
+}
+.ph-lock-pulse {
+  animation: ph-lock-pulse 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+@keyframes ph-lock-pulse {
+  from { transform: scale(1.3); }
+  to { transform: scale(1); }
+}
+
+/* Capture flash */
+.ph-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--ph-white);
+  pointer-events: none;
+}
+
+/* Control bar: menu · shutter · next */
+.ph-controls {
+  flex: none;
+  height: 140px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 28px calc(26px + env(safe-area-inset-bottom, 0px));
+  height: calc(140px + env(safe-area-inset-bottom, 0px));
+}
+.ph-round {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ph-ink);
+  border-radius: 50%;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-menu {
+  justify-self: start;
+  gap: 4px;
+  transition: transform 0.35s ease;
+}
+.ph-menu span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ph-ink);
+}
+.ph-shutter {
+  width: 84px;
+  height: 84px;
+  box-sizing: border-box;
+  border: 4px solid var(--ph-ink);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+.ph-shutter-disc {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: var(--ph-ink);
+  transition: transform 0.12s ease-out;
+}
+.ph-next {
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.35s ease;
+}
+.ph-next-label {
+  font-size: 11px;
+  color: var(--ph-secondary);
+}
+
+/* 7. Toast */
+.ph-toast-row {
+  position: absolute;
+  top: calc(65px + env(safe-area-inset-top, 0px));
+  left: 0;
+  right: 0;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.ph-toast {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ph-ink);
+  color: var(--ph-white);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  transition: opacity 0.2s, transform 0.25s;
+}
+
+/* 3. Shot dock (LV-D19: 56 px tiles that scroll sideways; no magnifier, so nothing grows over the stage) */
+.ph-dock-strip {
+  flex: none;
+  position: relative;
+  z-index: 10;
+  height: 84px;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+/* The strip's own height; scrolled by the pointer handlers (scrollLeft), never by the browser. */
+.ph-dock-scroller {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 84px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+  scrollbar-width: none;
+}
+.ph-dock-row {
+  flex: none;
+  /* The tiles' places are measured in the row (a lifted template-shot photo's home, LV-D21 (3)). */
+  position: relative;
+  min-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+.ph-dock-divider {
+  flex: none;
+  width: 1px;
+  height: 40px;
+  margin: 0 5px 8px;
+  background: var(--ph-divider);
+}
+.ph-dock-tile {
+  flex: none;
+  position: relative;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--ph-fill);
+  transition: transform 0.3s ease;
+}
+/*
+ * LV-D20 (3): a lifted photo. While one is lifted (`on`) or springing home (`back`) the scroller
+ * reaches 48 px above and below the strip, so the photo can follow the finger through the whole
+ * drop band without being cut; the row stays where it was. Idle, nothing is taller than the strip.
+ */
+.ph-dock-strip[data-drag='on'] .ph-dock-scroller,
+.ph-dock-strip[data-drag='back'] .ph-dock-scroller {
+  bottom: -48px;
+  height: 180px;
+  box-sizing: border-box;
+  padding-bottom: 48px;
+}
+/* The tiles of the lifted photo's group slide aside in 150 ms; a cancelled drag springs home in under 200 ms. */
+.ph-dock-strip[data-drag='on'] .ph-dock-tile {
+  transition: transform 0.15s ease;
+}
+.ph-dock-strip[data-drag='back'] .ph-dock-tile {
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* A drop is shown where it landed at once: nothing animates from where the tiles were drawn. */
+.ph-dock-strip[data-drag='set'] .ph-dock-tile {
+  transition: none;
+}
+.ph-dock-strip .ph-dock-tile[data-lifted] {
+  z-index: 5;
+  transition: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  animation: ph-dock-lift 0.15s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+/* Grows as it is lifted (on top of the transform's own 1.15, which is there from the first frame). */
+@keyframes ph-dock-lift {
+  from { scale: 0.87; box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+  to { scale: 1; }
+}
+/* LV-D21 (3): what a lifted template-shot photo leaves in its place — its shot as when empty (the grey template
+   picture and the number). It stands at the tile's measured place, takes no room in the row and no touch. */
+.ph-dock-strip .ph-dock-tile.ph-lift-home {
+  position: absolute;
+  transition: none;
+  pointer-events: none;
+}
+/* Too far above or below the strip: letting go here puts it back. */
+.ph-dock-tile[data-away] {
+  opacity: 0.55;
+}
+/* Where the lifted photo would land: on this shot (swap or fill), or at the end of this group. */
+.ph-dock-tile[data-drop]::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 16px;
+  pointer-events: none;
+}
+.ph-dock-tile[data-drop='swap']::after {
+  border: 2.5px solid var(--ph-ink);
+}
+.ph-dock-tile[data-drop='group']::after {
+  border: 1.5px dashed var(--ph-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-dock-strip .ph-dock-tile[data-lifted] {
+    animation: none;
+  }
+}
+.ph-dock-tile .ph-tag {
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
+}
+.ph-dock-free {
+  background: var(--ph-white);
+  border: 1.5px dashed var(--ph-ink);
+}
+.ph-dock-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 11px;
+  pointer-events: none;
+}
+.ph-dock-plus {
+  position: absolute;
+  left: 25%;
+  top: 25%;
+  pointer-events: none;
+}
+.ph-dock-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  margin-left: -0.75px;
+  border-left: 1.5px solid var(--ph-white);
+  pointer-events: none;
+}
+.ph-tag {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(17, 17, 17, 0.75);
+  color: var(--ph-white);
+  font-family: var(--ph-mono);
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.ph-tag-inverted {
+  background: var(--ph-white);
+  color: var(--ph-ink);
+}
+.ph-dock-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ph-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 4. Captured image preview (full-screen overlay) */
+.ph-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--ph-white);
+}
+.ph-preview {
+  animation: ph-preview-in 0.25s ease;
+}
+@keyframes ph-preview-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.ph-kicker {
+  font-size: 11px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.06em;
+}
+.ph-ratio-chip {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--ph-chip-border);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.ph-preview-photo {
+  /* A swipe that did not count springs back; while the finger is on it the transform follows at once (inline). */
+  transition: opacity 0.14s ease-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* LV-D20 (1): what a swipe will do, growing clearer with the distance; solid once it will count. */
+.ph-swipe-hint-row {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ph-swipe-hint {
+  padding: 10px 16px;
+  border: 2px solid var(--ph-white);
+  border-radius: 999px;
+  background: var(--ph-on-image-strong);
+  color: var(--ph-white);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.ph-swipe-hint[data-tone='deny'] {
+  background: var(--ph-live-dot);
+}
+.ph-swipe-hint[data-tone='none'] {
+  border-style: dashed;
+  background: var(--ph-on-image);
+  font-size: 12px;
+}
+.ph-swipe-hint[data-armed] {
+  transform: scale(1.12);
+  transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+/* The swiped picture leaving, over the next one; it takes no touch and is gone in 0.22 s. */
+.ph-swipe-out {
+  z-index: 5;
+  pointer-events: none;
+  transform: var(--ph-swipe-to);
+  opacity: 0;
+  animation: ph-swipe-out 0.22s ease-in;
+}
+@keyframes ph-swipe-out {
+  from { transform: var(--ph-swipe-from); opacity: 1; }
+  to { transform: var(--ph-swipe-to); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-swipe-out {
+    animation: none;
+  }
+}
+/* LV-D21 (4): under the strip only two round buttons, ⋯ at the left and × at the right. */
+.ph-preview-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 28px calc(26px + env(safe-area-inset-bottom, 0px));
+}
+.ph-preview-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ph-button {
+  height: 54px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--ph-ui);
+  font-size: 15px;
+  font-weight: 500;
+}
+.ph-button-outline {
+  border: 1.5px solid var(--ph-ink);
+  background: var(--ph-white);
+  color: var(--ph-ink);
+}
+.ph-button-solid {
+  border: 0;
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+.ph-button-wide {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+/* 5–6. Bottom sheets (photo drawer, Item drawer) */
+.ph-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ph-scrim);
+  transition: opacity 0.2s;
+}
+.ph-backdrop-menu { z-index: 32; }
+.ph-backdrop-photo { z-index: 35; }
+.ph-backdrop-confirm { z-index: 37; }
+.ph-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px 28px 0 0;
+  background: var(--ph-white);
+  transition: transform var(--ph-sheet);
+}
+.ph-sheet-menu {
+  z-index: 33;
+  gap: 20px;
+  padding: 12px 22px calc(34px + env(safe-area-inset-bottom, 0px));
+}
+/* LV-D21 (4): the photo's details and actions, over its Preview. */
+.ph-sheet-photo {
+  z-index: 36;
+  gap: 20px;
+  padding: 12px 22px calc(34px + env(safe-area-inset-bottom, 0px));
+}
+.ph-photo-facts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ph-photo-hint {
+  font-size: 13px;
+  color: var(--ph-secondary);
+  text-wrap: pretty;
+}
+/* LV-D20 (1): the confirmation, above the Preview and the photo drawer. */
+.ph-sheet-confirm {
+  z-index: 38;
+  gap: 18px;
+  padding: 12px 20px calc(34px + env(safe-area-inset-bottom, 0px));
+  animation: ph-sheet-in var(--ph-sheet);
+}
+@keyframes ph-sheet-in {
+  from { transform: translateY(105%); }
+  to { transform: translateY(0); }
+}
+.ph-confirm-text {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.ph-grab {
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ph-handle);
+}
+.ph-section {
+  font-size: 10px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.08em;
+}
+/* 6. Item drawer */
+.ph-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ph-item-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ph-item-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ph-item-connected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.04em;
+}
+.ph-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ph-live-dot);
+  animation: ph-blink 1.6s infinite;
+}
+@keyframes ph-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.ph-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ph-fill);
+  color: var(--ph-ink);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ph-hairline);
+}
+.ph-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--ph-hairline);
+  font-size: 14px;
+}
+.ph-row dt {
+  color: var(--ph-secondary);
+}
+.ph-row dd {
+  margin: 0;
+  text-align: right;
+}
+.ph-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 7. Reframe (LV-D21 (6)): the Mac's composition on the phone. Full screen over the Preview; the frame stays
+   centred in the stage and the photo moves under it. Everything outside the frame is dimmed with the page's white,
+   so the framed part reads as the result. */
+.ph-reframe {
+  position: absolute;
+  inset: 0;
+  z-index: 39;
+  display: flex;
+  flex-direction: column;
+  background: var(--ph-white);
+  animation: ph-preview-in 0.2s ease;
+}
+.ph-reframe-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+.ph-reframe-text {
+  min-width: 76px;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 16px;
+  font-weight: 500;
+}
+.ph-reframe-done {
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+.ph-reframe-done:disabled {
+  opacity: 0.35;
+}
+.ph-reframe-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--ph-fill);
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+/* The whole turned frame, placed by the Mac's view maths (inline transform, about its centre). */
+.ph-reframe-picture {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  will-change: transform;
+  container-type: size;
+  pointer-events: none;
+}
+.ph-reframe-picture img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+.ph-reframe-picture img[data-swapped] {
+  width: 100cqh;
+  height: 100cqw;
+}
+.ph-reframe-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ph-white);
+  outline: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 100vmax rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+/* Guide lines over a picture (the editor's frame, the live view): light with a dark edge, readable on any photo. */
+.ph-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.ph-guides line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 0.5px rgba(0, 0, 0, 0.7));
+  vector-effect: non-scaling-stroke;
+}
+/* The fine grid while straightening (the Mac's 24 px squares; the size is inline). */
+.ph-reframe-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+.ph-reframe-tools {
+  flex: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.ph-reframe-straighten {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ph-reframe-straighten input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  accent-color: var(--ph-ink);
+  touch-action: pan-y;
+}
+.ph-reframe-straighten output {
+  flex: none;
+  width: 52px;
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ph-reframe-row {
+  display: flex;
+  gap: 8px;
+}
+.ph-reframe-kind {
+  flex: 1.6;
+  display: flex;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--ph-fill);
+}
+.ph-reframe-kind button {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ph-secondary);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  font-weight: 500;
+}
+.ph-reframe-kind button[aria-pressed='true'] {
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.ph-reframe-tool {
+  flex: 1;
+  height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 12px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-reframe-tool[aria-expanded='true'] {
+  border-color: var(--ph-ink);
+}
+/* A tool's choices, in a small sheet over the stage's lower edge; it closes after a pick. */
+.ph-reframe-menu {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 100%;
+  margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--ph-white);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.ph-reframe-item {
+  flex: 1 1 auto;
+  height: 42px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.ph-reframe-item[aria-current='true'] {
+  border-color: var(--ph-ink);
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+/* LV-D21 (7): the Item drawer's Guides row (the guides over the live view): one row, the chosen one filled. Its
+   name is "Guides" (the group's label), set in capitals like the other section names. */
+.ph-section-caps {
+  text-transform: uppercase;
+}
+.ph-guides-row {
+  display: flex;
+  gap: 6px;
+}
+.ph-guides-row button {
+  flex: 1 1 auto;
+  height: 42px;
+  padding: 0 8px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ph-guides-row button[aria-pressed='true'] {
+  border-color: var(--ph-ink);
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+/* The photo drawer's Reframe while the Mac has no full-frame preview yet. */
+.ph-button:disabled {
+  opacity: 0.35;
+}
+.ph-action-why {
+  font-size: 13px;
+  color: var(--ph-secondary);
+  text-align: center;
+}
+
+/* Item properties (LV-D17: an empty page for now) */
+.ph-page {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--ph-white);
+}
+.ph-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px 16px;
+}
+.ph-page-body {
+  flex: 1;
+  min-height: 0;
+}

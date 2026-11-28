@@ -25,6 +25,20 @@ it is no longer required; its reason still holds for any build made *before* the
 does not know the publish step `held` or the research columns, so never point it at a data dir a
 research build has written. A scratch folder stays the sensible choice for try-outs.
 
+Phone in the dev app (LV2, LV3): `cd apps/desktop && npm run build` once (the server serves `apps/desktop/dist`, or
+`PSM_PHONE_WEB=<dir>`; rebuild after changing anything under `src/phone/`), then run the app; Settings → Phone shows
+"Phone server on port 8686". **Pair a phone**, scan the QR code with the phone (same Wi-Fi): the Shoot Companion
+opens on the active session (with no session open it says "Open a session in Session Manager to start shooting.").
+iPhone: Share → Add to Home Screen, then open it from the home screen; Android: tap **Full screen**. If the phone
+cannot resolve the `.local` name, use **Show the address instead**. Remove the pairing: the phone says it was
+removed. To look at the phone page without a phone, `npm run dev` and open `http://localhost:1420/phone.html` in a
+phone-sized browser window (it shows the pairing text: the dev server is not the Mac's phone server; for the full app
+open `http://localhost:8686/phone/?pair=<token>` from a pairing link while the app runs). Phone tests:
+`npx vitest run src/phone` (from `apps/desktop`); server rows `cargo test -p psm-testkit --test suite -- lv2_phone_http::
+lv2_phone_ws:: lv3_server_carry::`. Log lines: `phone.server listening port=… addresses=…`, `phone.request route=… status=… pairing=…`,
+`phone.viewer opened|closed`, `current_shot.bound …`. `psm-desktop` builds only when `apps/desktop/dist/` exists
+(`tauri.conf.json` bundles it as `phone-web/`).
+
 ## Tests, lint, typecheck (flow §4A; one cargo command at a time, never two, never piped into `head`)
 | Purpose | Command |
 |---|---|
@@ -242,3 +256,16 @@ apps/desktop/src-tauri/target/debug/psm-research <command> …
 - When the book catches up with the code, delete the row from `01_product.md` §Book pending updates.
 - The reviewer checks the guide like the registry: a phase that moves something the guide names
   without updating the guide gets a backlog note.
+
+## LV1 live-view checks
+The sidecar accepts `--frame-socket <path>` in `auto`; the first stdin line is still credentials.
+A focus line is `focus x=<0..639> y=<0..479> af=<0|1> cmd_id=<id>` and its result is a JSON
+`focus.result`. Binary frames use `PSLV` version 1, a 24-byte little-endian header and the
+camera's JPEG unchanged. For fake-sidecar scripts, `frame <epoch> <number> <width> <height> <len>`
+writes one deterministic record over the channel the fake connects to at process start;
+`frames <epoch> <first> <count> <interval_ms>` writes a run of
+640×424 records; `badframe` writes wrong magic. `{focus_cmd_id}` substitutes the last focus
+command id. `cargo test -p psm-testkit --test suite lv1_frame_channel::` checks the wired path;
+`lv1_live_hub::` checks viewer demand and focus independently of the SDK. `PSM_LOG=debug` shows
+`liveview.started`, `live.source … frames_10s=`, `focus.request` and `focus.result` when an SDK
+helper and a camera are present.

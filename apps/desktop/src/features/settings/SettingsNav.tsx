@@ -1,6 +1,6 @@
 import { goTo } from '@/lib/routes';
 
-export type SettingsSection = 'capture-one' | 'camera' | 'export-and-previews' | 'shopify' | 'pricing' | 'storage' | 'research' | 'writer' | 'shooting-templates';
+export type SettingsSection = 'capture-one' | 'camera' | 'phone' | 'export-and-previews' | 'shopify' | 'pricing' | 'storage' | 'research' | 'writer' | 'shooting-templates';
 
 /** A28: another page can open Settings on one section (the conversations panel → Pricing). */
 export const SETTINGS_SECTION_EVENT = 'psm:settings-section';
@@ -26,6 +26,7 @@ export function openSettingsSection(section: SettingsSection): void {
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'capture-one', label: 'Capture One' },
   { id: 'camera', label: 'Camera' },
+  { id: 'phone', label: 'Phone' },
   { id: 'export-and-previews', label: 'Export and previews' },
   { id: 'shopify', label: 'Shopify' },
   { id: 'pricing', label: 'Pricing' },

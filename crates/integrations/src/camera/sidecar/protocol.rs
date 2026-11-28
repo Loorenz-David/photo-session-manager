@@ -145,6 +145,48 @@ pub enum SidecarEvent {
         error: String,
         timeout: Option<bool>,
     },
+    LiveviewStarted {
+        epoch: u32,
+        transport: Transport,
+        status: String,
+        frame_channel: String,
+    },
+    LiveviewStopped {
+        epoch: u32,
+        reason: String,
+        frames: u64,
+        repeats: u64,
+        errors: u64,
+    },
+    LiveviewUnavailable {
+        reason: String,
+    },
+    LiveviewStats {
+        epoch: u32,
+        frames: u64,
+        repeats: u64,
+        errors: u64,
+        fps: f64,
+    },
+    LiveviewFocusFrame {
+        frames: Vec<[i64; 8]>,
+    },
+    LiveviewExposure {
+        shutter_speed: String,
+        f_number: String,
+        iso: String,
+    },
+    FocusResult {
+        cmd_id: String,
+        x: u16,
+        y: u16,
+        af: String,
+        point_set: bool,
+        refused: Option<String>,
+        point_ms: Option<i64>,
+        af_ms: Option<i64>,
+        total_ms: i64,
+    },
     Unknown {
         event: String,
     },
@@ -314,6 +356,48 @@ pub fn parse_line(line: &str) -> Result<Stamped, ProtocolError> {
             error: f.req_str("error")?,
             timeout: f.opt_bool("timeout"),
         },
+        "liveview.started" => SidecarEvent::LiveviewStarted {
+            epoch: f.req_u32("epoch")?,
+            transport: f.transport()?,
+            status: f.req_str("status")?,
+            frame_channel: f.req_str("frame_channel")?,
+        },
+        "liveview.stopped" => SidecarEvent::LiveviewStopped {
+            epoch: f.req_u32("epoch")?,
+            reason: f.req_str("reason")?,
+            frames: f.req_u64("frames")?,
+            repeats: f.req_u64("repeats")?,
+            errors: f.req_u64("errors")?,
+        },
+        "liveview.unavailable" => SidecarEvent::LiveviewUnavailable {
+            reason: f.req_str("reason")?,
+        },
+        "liveview.stats" => SidecarEvent::LiveviewStats {
+            epoch: f.req_u32("epoch")?,
+            frames: f.req_u64("frames")?,
+            repeats: f.req_u64("repeats")?,
+            errors: f.req_u64("errors")?,
+            fps: f.req_f64("fps")?,
+        },
+        "liveview.focus_frame" => SidecarEvent::LiveviewFocusFrame {
+            frames: f.req_frames("frames")?,
+        },
+        "liveview.exposure" => SidecarEvent::LiveviewExposure {
+            shutter_speed: f.req_display("shutter_speed")?,
+            f_number: f.req_display("f_number")?,
+            iso: f.req_display("iso")?,
+        },
+        "focus.result" => SidecarEvent::FocusResult {
+            cmd_id: f.req_str("cmd_id")?,
+            x: f.req_u16("x")?,
+            y: f.req_u16("y")?,
+            af: f.req_str("af")?,
+            point_set: f.req_bool("point_set")?,
+            refused: f.opt_str("refused"),
+            point_ms: f.opt_i64("point_ms"),
+            af_ms: f.opt_i64("af_ms"),
+            total_ms: f.req_i64("total_ms")?,
+        },
         other => SidecarEvent::Unknown {
             event: other.to_owned(),
         },
@@ -326,6 +410,14 @@ pub fn parse_line(line: &str) -> Result<Stamped, ProtocolError> {
 
 struct Fields<'a>(&'a Map<String, Value>);
 impl Fields<'_> {
+    fn req_display(&self, key: &str) -> Result<String, ProtocolError> {
+        let value = self.0.get(key).ok_or(ProtocolError::Json)?;
+        value
+            .as_str()
+            .or_else(|| value.get("display").and_then(Value::as_str))
+            .map(str::to_owned)
+            .ok_or(ProtocolError::Json)
+    }
     fn req_str(&self, key: &str) -> Result<String, ProtocolError> {
         self.opt_str(key).ok_or(ProtocolError::Json)
     }
@@ -340,6 +432,41 @@ impl Fields<'_> {
     }
     fn req_i64(&self, key: &str) -> Result<i64, ProtocolError> {
         self.opt_i64(key).ok_or(ProtocolError::Json)
+    }
+    fn req_u64(&self, key: &str) -> Result<u64, ProtocolError> {
+        self.0
+            .get(key)
+            .and_then(Value::as_u64)
+            .ok_or(ProtocolError::Json)
+    }
+    fn req_u32(&self, key: &str) -> Result<u32, ProtocolError> {
+        u32::try_from(self.req_u64(key)?).map_err(|_| ProtocolError::Json)
+    }
+    fn req_u16(&self, key: &str) -> Result<u16, ProtocolError> {
+        u16::try_from(self.req_u64(key)?).map_err(|_| ProtocolError::Json)
+    }
+    fn req_f64(&self, key: &str) -> Result<f64, ProtocolError> {
+        self.0
+            .get(key)
+            .and_then(Value::as_f64)
+            .ok_or(ProtocolError::Json)
+    }
+    fn req_frames(&self, key: &str) -> Result<Vec<[i64; 8]>, ProtocolError> {
+        let rows = self
+            .0
+            .get(key)
+            .and_then(Value::as_array)
+            .ok_or(ProtocolError::Json)?;
+        rows.iter()
+            .map(|row| {
+                let items = row.as_array().ok_or(ProtocolError::Json)?;
+                let arr: Vec<i64> = items
+                    .iter()
+                    .map(|v| v.as_i64().ok_or(ProtocolError::Json))
+                    .collect::<Result<_, _>>()?;
+                arr.try_into().map_err(|_| ProtocolError::Json)
+            })
+            .collect()
     }
     fn opt_i64(&self, key: &str) -> Option<i64> {
         self.0.get(key).and_then(Value::as_i64)
@@ -446,6 +573,12 @@ pub enum Command {
         af: bool,
         cmd_id: String,
     },
+    Focus {
+        x: u16,
+        y: u16,
+        af: bool,
+        cmd_id: String,
+    },
     Props {
         cmd_id: String,
     },
@@ -489,6 +622,9 @@ impl Command {
             Command::Capture { id, af, cmd_id } => {
                 with_id(format!("capture id={id} af={}", u8::from(*af)), cmd_id)
             }
+            Command::Focus { x, y, af, cmd_id } => {
+                with_id(format!("focus x={x} y={y} af={}", u8::from(*af)), cmd_id)
+            }
             Command::Props { cmd_id } => with_id("props".into(), cmd_id),
             Command::FtpStatus { cmd_id } => with_id("ftp-status".into(), cmd_id),
             Command::Status { cmd_id } => with_id("status".into(), cmd_id),
@@ -516,6 +652,7 @@ impl Command {
     pub fn cmd_id(&self) -> Option<&str> {
         match self {
             Command::Capture { cmd_id, .. }
+            | Command::Focus { cmd_id, .. }
             | Command::Props { cmd_id }
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }
@@ -529,6 +666,7 @@ impl Command {
     pub fn with_cmd_id(mut self, id: &str) -> Self {
         match &mut self {
             Command::Capture { cmd_id, .. }
+            | Command::Focus { cmd_id, .. }
             | Command::Props { cmd_id }
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }

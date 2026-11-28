@@ -233,6 +233,118 @@ label printed itself. Same key and store as conversations; labels need the scope
 - **Products from the other Mac** (shop-only items) count as Published in the sessions list until their photos are
   brought back for editing (09C §14.3).
 
+## The phone and the current shot (book `10J`, `11` §Phone remote; `docs/implementation/master_plan_live.md`; LV1–LV3 built, LV4 the hardware check)
+- **Current shot.** In a templated session one container is "current" (the Mac outlines it "Next"). Every shutter —
+  the phone, the Mac or the camera's own button — goes to the shot that was current when the camera fired, even
+  when its file arrives late over Wi-Fi; then the current shot moves to the next empty container in shooting order,
+  else the first empty one, else none (shots go to Condition). After a Condition shot it goes back to the first empty
+  container (P1). A photo with no shutter report (Capture One tether, or a file more than 5 minutes after its shutter)
+  takes the shot that is current when it arrives (P2).
+- **Retake** (phone) denies the photo in a shot at once (undoable) and makes that shot current; the next shot fills it
+  with its presets. A Deny on the Mac no longer refills the container by itself; "Shift the rest back" stays (P3).
+- **Pairing.** Settings → Phone → Pair a phone shows a QR code; the phone opens the app from it and keeps its token.
+  The phone server is on by default on port 8686 and answers only paired phones (P4). Remove stops a phone at once;
+  its installed app stays unpaired, so the phone's screen says to delete the app from the home screen and add it
+  again from the new QR code (LV6, LV-D19).
+- **Session guard.** Every phone action names its session; if the Mac switched session in between, the phone is told
+  "Session changed on the Mac" and nothing happens (P5).
+- **The phone app ("Shoot Companion", LV3; the owner's design, book 10J §The phone design).** Plain HTTP, no install
+  needed (iPhone: Add to Home Screen opens it full screen; Android: a **Full screen** button). It follows the Mac's
+  active session and shows:
+  - **Main screen.** The current shot's template in black and white. **Hold** the picture for live, release for the
+    template; **slide up** (55 px: half the design's distance, LV-D19) to lock live (double-tap unlocks); **slide sideways** to set how much of the template shows
+    through live (0–100 %, starts at 35 %); while locked, **tap** to focus there ("AF LOCKED"; × sends the focus point
+    back to the centre). Long shots turn the view 90° so the phone is held sideways. A split shot shows a centre line
+    and Left/Right. The exposure (shutter · aperture · ISO) is read-only on live.
+  - **Shutter.** Flash and haptic at once; the toast ("Shot 04 captured", "Condition image added") comes when the Mac
+    shows where the photo landed. The phone never moves the current shot itself: it shows what the Mac says.
+  - **Shot dock.** Template shots in shooting order with their final numbers, extra Main images, the **Free shot** tile
+    (in a templated session its captures are Condition, card LV7), then Condition images (C1…). 56 px tiles that
+    **scroll sideways**; a **tap** selects an empty shot or opens an image's preview (LV6, book 10J LV-D19: no
+    magnifier, no drag-up). **Press and hold a photo (0.4 s) to lift it** (LV8, book 10J LV-D20 (3)): it grows and
+    follows the finger; dropped **on a template shot** it swaps with that shot's photo (an empty shot is filled, card
+    LV8); dragged **along its own group** (extra Main photos, or Condition images) the others slide aside and it is
+    inserted there; dropped **into the other group** it goes to that group's end (a template shot's photo dropped
+    among the extras asks first, as the right swipe does). Held at an end of the strip, the strip scrolls. A second
+    finger, the phone taking the touch away, leaving the app, the Mac changing the photos meanwhile, or letting go
+    more than 48 px above or below the strip puts the photo back and asks nothing. **The drop shows at once**; if
+    the Mac refuses, the strip goes back and the phone says why; after 8 s without an answer it goes back and asks the
+    Mac again. An empty shot and the Free shot tile never lift (their long press is a tap). **A photo on its way
+    shows a quiet loading cue from the shutter until its picture** (LV9, book 10J LV-D21 (1)), in the live screen's
+    strip and in the Preview's: a template shot the camera has fired for shows a slow light moving over grey in
+    place of its template picture and keeps its number; a capture on its way to the Condition images (or to the end
+    of Main in a session without a template) shows a waiting tile at the end of that group. "On its way" is the
+    Mac's own rule: from the reported shutter until the photo exists on the Mac, at most 5 minutes. Waiting tiles
+    take no tap, never lift, are no drop target, and one appearing never cancels a drag. Once the photo exists its
+    own tile keeps the cue until its picture is there; the picture appears by itself, never a broken image. A
+    picture that failed to load after three more tries is plain grey (it is not on its way); with Reduce Motion on
+    nothing moves at all. **Next** jumps to the next empty shot in shooting
+    order, then to Free shot. In Free shot live is always on (there is no template to show).
+  - **Preview.** Minimal at first glance (LV9, book 10J LV-D21 (4)): only the captured image, the photo strip, a
+    **⋯** button (bottom left) and a **close** icon (bottom right). No header, no pill or hint resting on the photo,
+    no button block. **⋯** opens the photo drawer: what the photo is ("SHOT 02 · CAPTURED", the shot's name, the
+    ratio), for a template shot's photo the line "Hold to view template · slide sideways for overlay" and under
+    ACTIONS **Retake** (the photo is denied at once, undoable on the Mac, the shot is current again, the drawer and
+    the Preview close). While the drawer is open the photo and the strip take no touch; it closes on its ×, on the
+    backdrop and with its Preview. **×** goes back to the live screen. **Move image is gone**: dragging in the strips
+    and swiping reach every place its drawer offered. **Swipe to sort** (LV8, book 10J
+    LV-D20 (1)): **left = Deny** (a template shot's photo as Retake does; ⌘Z on the Mac brings it back), **right =
+    Main** (a Condition image goes to the end of Main; a template shot's photo first asks "Move this photo to Main,
+    outside its template order?" with Move / Cancel, and its shot is then empty and current), **up = Condition** (a
+    template shot it filled is empty and current). A swipe counts from 96 px; the next photo shows at once (after the
+    last one the Preview closes); a photo already in that group springs back ("ALREADY MAIN" / "ALREADY CONDITION");
+    downwards does nothing. On a template shot's photo a still hold of 0.2 s shows its template instead (sideways
+    then sets the overlay); only then do the "TEMPLATE" pill and the overlay readout show. There is **no Delete
+    button** (the left swipe denies). The Preview shows **the same photo strip** as the live screen between the
+    picture and the two buttons, marking the photo shown: a tap shows another photo, a tap on an empty shot or the
+    Free shot makes it current and closes the Preview, and photos are lifted and dragged there as on the live screen.
+  - **Pinch to zoom in the Preview** (LV10, book 10J LV-D21 (5)): two fingers zoom the photo about the point between
+    them, from 1× to 6× (while the fingers are down it stretches a little past both and settles on release); zoomed,
+    one finger moves it, never past its edge, and **swipes and the hold for the template are off** (the strip, ⋯ and
+    × still work). A **double tap** zooms to 3× about the tap, or back to 1×. A second finger during a swipe or a
+    hold ends it (nothing is sent) and starts a pinch. The phone taking the touch away, leaving the app or a blur
+    ends the gesture where it is. Another photo always shows at 1×.
+  - **Photos are shown as composed** (LV10, book 10J LV-D21 (6), 10D §The result is shown): once the Mac has Capture
+    One's full-frame preview of a photo, the Preview and the strips show it as the Mac frames it (turned, flipped,
+    straightened, cut to its frame; a split shows its middle line) and the Preview's picture has the framing's
+    shape. Before that (the camera's own preview only) the picture shows as it is. Display only: the phone places
+    the Mac's preview with CSS, no image is processed (H3).
+  - **Reframe on the phone** (LV10, book 10J LV-D21 (6), 10D MC-27): **⋯ → Reframe** in the Preview opens the
+    Mac's composition as an editor over the photo (while the Mac has no full-frame preview of it yet, Reframe is off
+    and says "Waiting for Capture One's full-frame preview"). The frame stays centred and the photo moves under it:
+    **one finger moves it; two fingers move it, zoom it (spread = closer) and straighten it** (a twist counts after
+    3°, then follows the fingers in 0.1° steps, −45° to 45°). **The frame never shows empty corners**: the photo
+    stops where the frame would leave it, while moving, never by springing back; straightening shrinks the frame
+    about its centre just enough, as the Mac does. A **fine grid** (the Mac's 24 px squares) shows only while two
+    fingers straighten or the straighten slider is held. Controls: **Normal | Split**, **Shape** (Original, 1:1, 4:5,
+    3:2, 2:3, 16:9, Free) with **Turn** beside it, **Rotate and flip** (Rotate 90° left, Rotate 90° right, Flip
+    horizontal; the menu closes after a pick), **Guides** inside the frame (Off, Thirds, Grid, Golden ratio,
+    Diagonals; remembered on the phone, Thirds the first time) and **Reset** (the Mac's default framing: the default
+    shape, centred, as large as fits). No trimming handles on the phone: a Free shape keeps its proportions (trim it
+    on the Mac). The editor stays upright even for a long shot. **Cancel** closes it and nothing reaches the Mac.
+    **Done** saves the framing into the Mac's own composition (one request; Done waits for its answer): the toast
+    says "Framing saved", the Preview and the strips show the new framing, the Mac shows it at once, its exports
+    and uploads follow the new framing as for an edit made on the Mac, and ⌘Z on the Mac undoes it (one step
+    "Compose NN"). Done with nothing changed sends nothing; Done right after Reset asks the Mac for its own reset.
+    If the photo's framing changed on the Mac while the editor was open, Done is refused and nothing is
+    overwritten ("Framing changed on the Mac. Open Reframe again."); a framing the Mac finds invalid stays in the
+    editor ("That framing could not be saved."); if the Mac switched session the editor closes ("Session changed
+    on the Mac"). The editor also closes, with nothing sent, when its photo leaves the session.
+  - **Nothing blinks when photos move** (LV9, book 10J LV-D21 (2), (3)): a drop **and a swipe** show in both strips at
+    once; several quick ones stack and the strips keep showing them all until the Mac has answered every one (a
+    refusal, or 8 s without an answer, puts the strips back to the Mac's view). A moved photo keeps its picture (it
+    is fetched again only when its file changed on the Mac). While a template shot's photo is lifted, its place
+    shows that shot's grey template picture with its number, as an empty shot does; extras and Condition images
+    leave a gap.
+  - **Item drawer** (menu button): item name, SKU, article number (the barcode, only when the item has one), current
+    shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17). **Guides** (LV10, book
+    10J LV-D21 (7)): Off, Thirds, Grid, Golden ratio, Diagonals — the composition guides drawn over the live
+    screen's picture, live and template alike (each half of a split shot has its own; they turn with a long shot).
+    Off the first time; remembered on the phone; a separate choice from the reframe editor's guides. Drawn by the
+    phone only and they take no touch (a tap still focuses).
+  - Haptics on Android only (iPhone browsers have none). No wake lock: the screen follows the phone's Auto-Lock; when
+    it comes back the app reconnects by itself.
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|

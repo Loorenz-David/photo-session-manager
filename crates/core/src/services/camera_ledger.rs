@@ -68,6 +68,7 @@ pub struct LedgerService {
     pub health: Arc<HealthService>,
     pub capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>,
     pub shared: Arc<LedgerShared>,
+    pub current_shots: Arc<crate::services::current_shot::CurrentShots>,
 }
 
 /// One file on its way to its final path.
@@ -578,14 +579,18 @@ impl CaptureSink for LedgerService {
         let _worker = locked(&self.shared.worker);
         let session_id = self.store.active_session_id()?;
         let at = e.at;
-        let id = self.store.insert_exposure(&NewExposure {
-            capture_id: e.capture_id.map(|c| c.0),
-            exposed_at: at,
-            initiated: e.initiated,
-            session_id,
-            created_at: self.clock.now_ms(),
-        })?;
-        self.store.match_late_exposure(id, at)?;
+        let id = self.current_shots.bind_exposure(
+            self.store.as_ref(),
+            self.events.as_ref(),
+            &NewExposure {
+                capture_id: e.capture_id.map(|c| c.0),
+                exposed_at: at,
+                initiated: e.initiated,
+                session_id,
+                created_at: self.clock.now_ms(),
+                shot: None,
+            },
+        )?;
         Ok(id)
     }
     fn delivery(&self, d: Delivery) -> Result<DeliveryOutcome> {
